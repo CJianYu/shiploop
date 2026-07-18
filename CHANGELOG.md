@@ -5,6 +5,8 @@ Keep a Changelog categories.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-18
+
 ### Added
 
 - Repository detection and gradual initialization.
@@ -17,3 +19,10 @@ Keep a Changelog categories.
 - Local parallel lane coordination with conservative overlap detection.
 - Idempotent, independently installable hooks that preserve existing repository automation.
 - OIDC-based npm release automation with tag/version verification and generated GitHub releases.
+
+### Fixed
+
+- Normalize Git-reported paths across Windows and POSIX before enforcing explicit-path commits.
+
+[Unreleased]: https://github.com/CJianYu/shiploop/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/CJianYu/shiploop/releases/tag/v0.1.0
