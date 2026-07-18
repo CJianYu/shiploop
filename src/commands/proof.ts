@@ -16,15 +16,19 @@ export async function proofCommand(
 ): Promise<void> {
   const config = await loadConfig(cwd);
   const files = options.staged ? await stagedFiles(cwd) : await changedFiles(cwd);
+  const startingFingerprint = await repositoryFingerprint(cwd);
   let steps = selectSteps(config.proof.steps, files, Boolean(options.all));
   if (options.quick) steps = steps.filter((step) => step.quick);
 
   if (!files.length && !options.all) {
-    ui.warn('No changed files. Use --all to run every proof step.');
+    if (options.json) console.log(JSON.stringify({ files, results: [], passed: true, skipped: 'no-files' }, null, 2));
+    else ui.warn('No changed files. Use --all to run every proof step.');
     return;
   }
   if (!steps.length) {
-    ui.warn(options.quick
+    const reason = options.quick ? 'no-quick-steps' : 'no-matching-steps';
+    if (options.json) console.log(JSON.stringify({ files, results: [], passed: true, skipped: reason }, null, 2));
+    else ui.warn(options.quick
       ? 'No quick proof steps match this change.'
       : 'No proof steps match this change. Configure proof.steps or use --all.');
     return;
@@ -50,8 +54,17 @@ export async function proofCommand(
     }
   }
 
-  if (options.json) console.log(JSON.stringify({ files, results, passed: !requiredFailure }, null, 2));
-  if (requiredFailure) {
+  const endingFingerprint = await repositoryFingerprint(cwd);
+  const changedDuringProof = startingFingerprint !== endingFingerprint;
+  if (changedDuringProof && !options.json) ui.fail('The diff changed while proof was running. Run proof again on a stable snapshot.');
+  if (options.json) console.log(JSON.stringify({
+    files,
+    results,
+    passed: !requiredFailure && !changedDuringProof,
+    changedDuringProof,
+    quick: Boolean(options.quick),
+  }, null, 2));
+  if (requiredFailure || changedDuringProof) {
     process.exitCode = 1;
     return;
   }
@@ -62,7 +75,7 @@ export async function proofCommand(
   }
   await saveReceipt(cwd, {
     version: 1,
-    fingerprint: await repositoryFingerprint(cwd),
+    fingerprint: endingFingerprint,
     createdAt: new Date().toISOString(),
     files,
     steps: results,

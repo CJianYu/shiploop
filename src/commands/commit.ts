@@ -3,6 +3,7 @@ import { join, normalize } from 'node:path';
 import { loadConfig } from '../config.js';
 import { stagedFiles } from '../lib/git.js';
 import { runArgs } from '../lib/process.js';
+import { withGitLock } from '../lib/lock.js';
 import { hasFreshReceipt } from '../proof-state.js';
 import { ui } from '../ui.js';
 
@@ -38,32 +39,34 @@ export async function commitCommand(
   if (options.message.length > config.commit.maxSubjectLength) {
     throw new Error(`Commit subject exceeds ${config.commit.maxSubjectLength} characters.`);
   }
-  if (config.proof.requireFreshForCommit && !options.noProof && !(await hasFreshReceipt(cwd))) {
-    throw new Error('Proof is missing or stale. Run shiploop proof, or explicitly use --no-proof.');
-  }
-
-  const preStaged = await stagedFiles(cwd);
-  const outside = preStaged.filter((file) => !paths.includes(file));
-  if (outside.length) {
-    throw new Error(`Refusing to mix unrelated staged files:\n${outside.map((file) => `  ${file}`).join('\n')}`);
-  }
   if (options.dryRun) {
     ui.info(`Would commit ${paths.length} file(s) as: ${options.message}`);
     for (const path of paths) console.log(`  ${path}`);
     return;
   }
-
-  const add = await runArgs('git', ['add', '-A', '--', ...paths], cwd);
-  if (add.code !== 0) throw new Error(add.stderr || 'git add failed.');
-  const staged = await stagedFiles(cwd);
-  if (!staged.length) throw new Error('No changes were staged.');
-  const unexpected = staged.filter((file) => !paths.includes(file));
-  if (unexpected.length) throw new Error(`Unexpected staged files: ${unexpected.join(', ')}`);
-
-  const result = await runArgs('git', ['commit', '-m', options.message, '--', ...paths], cwd, { inherit: true });
-  if (result.code !== 0) {
-    process.exitCode = result.code;
-    return;
-  }
-  ui.ok(`Committed ${staged.length} explicit file(s).`);
+  await withGitLock(cwd, 'commit', async () => {
+    if (config.proof.requireFreshForCommit && !options.noProof && !(await hasFreshReceipt(cwd))) {
+      throw new Error('Proof is missing or stale. Run shiploop proof, or explicitly use --no-proof.');
+    }
+    const preStaged = await stagedFiles(cwd);
+    const outside = preStaged.filter((file) => !paths.includes(file));
+    if (outside.length) {
+      throw new Error(`Refusing to mix unrelated staged files:\n${outside.map((file) => `  ${file}`).join('\n')}`);
+    }
+    const add = await runArgs('git', ['add', '-A', '--', ...paths], cwd);
+    if (add.code !== 0) throw new Error(add.stderr || 'git add failed.');
+    const staged = await stagedFiles(cwd);
+    if (!staged.length) throw new Error('No changes were staged.');
+    const unexpected = staged.filter((file) => !paths.includes(file));
+    if (unexpected.length) throw new Error(`Unexpected staged files: ${unexpected.join(', ')}`);
+    if (config.proof.requireFreshForCommit && !options.noProof && !(await hasFreshReceipt(cwd))) {
+      throw new Error('The diff changed while preparing the commit. Re-run shiploop proof.');
+    }
+    const result = await runArgs('git', ['commit', '-m', options.message, '--', ...paths], cwd, { inherit: true });
+    if (result.code !== 0) {
+      process.exitCode = result.code;
+      return;
+    }
+    ui.ok(`Committed ${staged.length} explicit file(s).`);
+  });
 }

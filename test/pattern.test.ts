@@ -14,7 +14,10 @@ describe('repository patterns', () => {
     expect(matchesAny('src/nested/a.ts', ['src/*.ts'])).toBe(false);
   });
 
-  it('matches root lockfiles with an optional recursive prefix', () => {
-    expect(matchesAny('package-lock.json', ['**/*lock*'])).toBe(true);
+  it('matches root lockfiles without classifying source files named lock', () => {
+    const patterns = ['**/package-lock.json', '**/Cargo.lock'];
+    expect(matchesAny('package-lock.json', patterns)).toBe(true);
+    expect(matchesAny('packages/app/Cargo.lock', patterns)).toBe(true);
+    expect(matchesAny('src/lib/lock.ts', patterns)).toBe(false);
   });
 });

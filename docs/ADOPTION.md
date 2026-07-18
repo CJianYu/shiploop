@@ -44,6 +44,20 @@ Create task briefs before opening parallel agents. Each brief declares paths the
 it must not touch. Prefer one or two active lanes; add more only when their write surfaces are truly
 independent.
 
+```bash
+shiploop lane start "Auth cleanup" --owner agent-1 --owns "src/auth/**,test/auth/**"
+shiploop lane start "Docs refresh" --owner agent-2 --owns "docs/**"
+shiploop lane status
+shiploop context --task "Auth cleanup"
+```
+
+Lane state is shared through Git's common directory, including across linked worktrees. Likely path
+overlap is rejected before a lane starts. Finish a lane when its logical change is integrated:
+
+```bash
+shiploop lane finish "Auth cleanup"
+```
+
 ## Profile guidance
 
 - `solo-fast`: maintainer controls the repository and can forward-fix quickly.

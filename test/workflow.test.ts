@@ -35,6 +35,8 @@ describe('safe workflow', () => {
 
     await proofCommand(root, {});
     expect(await hasFreshReceipt(root)).toBe(true);
+    await run('git add src/index.js', root);
+    expect(await hasFreshReceipt(root)).toBe(true);
     await writeFile(join(root, 'src/index.js'), 'export const answer = 43;\n');
     expect(await hasFreshReceipt(root)).toBe(false);
   });
@@ -100,5 +102,38 @@ commit:
     await taskCommand(root, '修复登录超时', { owner: 'agent-1' });
     const file = join(root, '.shiploop/tasks/修复登录超时.md');
     await expect(access(file)).resolves.toBeUndefined();
+  });
+
+  it('refuses to certify a diff that changes during proof', async () => {
+    const root = await repository();
+    await initCommand(root, { profile: 'team-pr' });
+    const configPath = join(root, '.shiploop/config.yml');
+    await writeFile(configPath, `version: 1
+profile: team-pr
+repository:
+  defaultBranch: main
+  strategy: short-branch
+proof:
+  requireFreshForCommit: true
+  steps:
+    - name: mutating-check
+      command: node -e "require('fs').writeFileSync('mutated.txt', 'changed')"
+      required: true
+risk:
+  high: []
+  medium: []
+commit:
+  conventional: true
+  maxSubjectLength: 72
+`);
+    const previousExitCode = process.exitCode;
+    try {
+      process.exitCode = undefined;
+      await proofCommand(root, {});
+      expect(process.exitCode).toBe(1);
+      expect(await readReceipt(root)).toBeUndefined();
+    } finally {
+      process.exitCode = previousExitCode;
+    }
   });
 });

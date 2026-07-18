@@ -19,6 +19,8 @@ bottleneck. Shiploop turns repository policy into executable commands:
 - `shiploop init` detects Node.js, Python, Go, Rust, and Swift repositories.
 - `shiploop doctor` checks that the local fast path is actually usable.
 - `shiploop task` creates one-context task briefs with explicit ownership boundaries.
+- `shiploop context` emits a compact repository and task packet for any coding agent.
+- `shiploop lane` coordinates parallel write surfaces and rejects likely overlap.
 - `shiploop proof` selects relevant checks and binds the passing receipt to the current diff.
 - `shiploop review` elevates migrations, auth, billing, permissions, CI, and other risky changes.
 - `shiploop commit` refuses `.` and globs, requires explicit files, and prevents staged spillover.
@@ -37,11 +39,14 @@ cd your-project
 shiploop init --profile team-pr --hooks
 shiploop doctor
 shiploop task "Preserve session expiry" --owner agent-1
+shiploop lane start "Preserve session expiry" --owner agent-1 --owns "src/auth/**,test/auth/**"
+shiploop context --task "Preserve session expiry"
 
 # Let your preferred coding agent implement the bounded task.
 shiploop proof
 shiploop review --diff
 shiploop commit -m "fix(auth): preserve session expiry" -- src/auth/session.ts test/session.test.ts
+shiploop lane finish "Preserve session expiry"
 shiploop closeout
 ```
 
@@ -114,6 +119,10 @@ validation.
 4. **Review by risk.** Deep-read authority, money, data, concurrency, and release paths.
 5. **Commit logical chunks.** Frequency is an outcome, never a productivity score.
 6. **Keep the release path scripted.** A change is not shipped merely because code was generated.
+
+Lane state is local and ephemeral under `.git/shiploop/lanes`; it never dirties the working tree.
+Shiploop conservatively rejects overlapping static path prefixes. `--allow-overlap` exists for
+coordinated exceptions, not as a default escape hatch.
 
 See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for design trade-offs and
 [docs/ADOPTION.md](docs/ADOPTION.md) for gradual rollout.

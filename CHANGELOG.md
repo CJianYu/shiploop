@@ -13,3 +13,5 @@ Keep a Changelog categories.
 - Risk-aware change review.
 - Explicit-path atomic commits.
 - Agent-lane task briefs and release closeout checks.
+- Agent-ready context packets combining task, proof, risk, and active ownership.
+- Local parallel lane coordination with conservative overlap detection.

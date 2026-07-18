@@ -3,8 +3,10 @@ import { Command, Option } from 'commander';
 import { readFileSync } from 'node:fs';
 import { closeoutCommand } from './commands/closeout.js';
 import { commitCommand } from './commands/commit.js';
+import { contextCommand } from './commands/context.js';
 import { doctorCommand } from './commands/doctor.js';
 import { initCommand } from './commands/init.js';
+import { laneFinishCommand, laneStartCommand, laneStatusCommand } from './commands/lane.js';
 import { proofCommand } from './commands/proof.js';
 import { reviewCommand } from './commands/review.js';
 import { taskCommand } from './commands/task.js';
@@ -45,6 +47,31 @@ program.command('task')
   .argument('<title>', 'short task title')
   .option('--owner <owner>', 'lane owner or agent name')
   .action(async (title: string, options: { owner?: string }) => taskCommand(await root(), title, options));
+
+program.command('context')
+  .description('Print a compact, agent-ready repository context packet')
+  .option('--task <title>', 'include a task brief by title or id')
+  .option('--json', 'emit machine-readable output')
+  .action(async (options: { task?: string; json?: boolean }) => contextCommand(await root(), options));
+
+const lane = program.command('lane').description('Coordinate parallel agent ownership without branches');
+lane.command('start')
+  .description('Start a local lane and reject ownership overlap')
+  .argument('<title>', 'lane title')
+  .requiredOption('--owner <owner>', 'agent or human responsible for the lane')
+  .requiredOption('--owns <patterns>', 'comma-separated path patterns owned by the lane')
+  .option('--allow-overlap', 'accept detected overlap after explicit coordination')
+  .action(async (title: string, options: { owner: string; owns: string; allowOverlap?: boolean }) => {
+    await laneStartCommand(await root(), title, options);
+  });
+lane.command('status')
+  .description('List active local lanes')
+  .option('--json', 'emit machine-readable output')
+  .action(async (options: { json?: boolean }) => laneStatusCommand(await root(), options));
+lane.command('finish')
+  .description('Mark a local lane complete')
+  .argument('<title>', 'lane title or id')
+  .action(async (title: string) => laneFinishCommand(await root(), title));
 
 program.command('proof')
   .description('Run the smallest relevant local checks and record a diff-bound receipt')

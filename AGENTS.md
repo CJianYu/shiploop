@@ -8,6 +8,9 @@ Shiploop is safety-sensitive developer tooling. Preserve these invariants:
 - Never discard, unstage, or commit unrelated user work.
 - Never modify global Git configuration.
 - Agent and model integrations remain optional adapters, not core dependencies.
+- Proof must fail if the working diff changes while checks are running.
+- Git index mutations must hold the repository-common commit lock.
+- Active lane state belongs under Git's common directory, never in the working tree.
 
 Before finishing a change, run:
 

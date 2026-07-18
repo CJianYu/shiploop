@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { lstat, readFile, readlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runArgs } from './process.js';
 
@@ -17,6 +17,14 @@ export async function gitDir(cwd: string): Promise<string> {
   const root = await gitRoot(cwd);
   const result = await runArgs('git', ['rev-parse', '--git-dir'], cwd);
   if (result.code !== 0) throw new Error('Cannot locate the Git directory.');
+  const value = result.stdout.trim();
+  return value.startsWith('/') ? value : join(root, value);
+}
+
+export async function gitCommonDir(cwd: string): Promise<string> {
+  const root = await gitRoot(cwd);
+  const result = await runArgs('git', ['rev-parse', '--git-common-dir'], cwd);
+  if (result.code !== 0) throw new Error('Cannot locate the common Git directory.');
   const value = result.stdout.trim();
   return value.startsWith('/') ? value : join(root, value);
 }
@@ -58,14 +66,19 @@ export async function repositoryFingerprint(cwd: string): Promise<string> {
 
   for (const file of files) {
     hash.update(file);
-    const trackedDiff = await runArgs('git', ['diff', 'HEAD', '--', file], root);
-    hash.update(trackedDiff.stdout);
-    if (!trackedDiff.stdout) {
-      try {
+    try {
+      const fileStat = await lstat(join(root, file));
+      hash.update(`mode:${fileStat.mode & 0o111};`);
+      if (fileStat.isSymbolicLink()) {
+        hash.update(`symlink:${await readlink(join(root, file))}`);
+      } else if (fileStat.isFile()) {
         hash.update(await readFile(join(root, file)));
-      } catch {
-        hash.update('<deleted>');
+      } else {
+        const metadata = await runArgs('git', ['diff', 'HEAD', '--raw', '--', file], root);
+        hash.update(`special:${metadata.stdout}`);
       }
+    } catch {
+      hash.update('<deleted>');
     }
   }
   return hash.digest('hex');

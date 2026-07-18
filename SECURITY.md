@@ -19,3 +19,5 @@ Before 1.0, only the latest release receives security fixes.
 - Broad commit pathspecs and path traversal are rejected.
 - Required proof failures produce a non-zero exit status.
 - Proof receipts live under `.git/` and are invalidated when the working diff changes.
+- A proof run refuses to certify a diff that changed while its checks were executing.
+- Shiploop serializes its own Git index mutations with a repository-common lock.

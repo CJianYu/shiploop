@@ -1,22 +1,13 @@
 import { loadConfig } from '../config.js';
 import { changedFiles } from '../lib/git.js';
-import { matchesAny } from '../lib/pattern.js';
 import { runArgs } from '../lib/process.js';
+import { classifyFiles } from '../risk.js';
 import { ui } from '../ui.js';
-
-type Risk = 'high' | 'medium' | 'low';
 
 export async function reviewCommand(cwd: string, options: { json?: boolean; diff?: boolean }): Promise<void> {
   const config = await loadConfig(cwd);
   const files = await changedFiles(cwd);
-  const classified = files.map((file) => ({
-    file,
-    risk: (matchesAny(file, config.risk.high)
-      ? 'high'
-      : matchesAny(file, config.risk.medium)
-        ? 'medium'
-        : 'low') as Risk,
-  })).sort((a, b) => riskOrder(a.risk) - riskOrder(b.risk) || a.file.localeCompare(b.file));
+  const classified = classifyFiles(files, config);
 
   if (options.json) {
     console.log(JSON.stringify({ files: classified }, null, 2));
@@ -46,8 +37,4 @@ export async function reviewCommand(cwd: string, options: { json?: boolean; diff
     const diff = await runArgs('git', ['diff', 'HEAD'], cwd, { inherit: true });
     if (diff.code !== 0) process.exitCode = diff.code;
   }
-}
-
-function riskOrder(risk: Risk): number {
-  return risk === 'high' ? 0 : risk === 'medium' ? 1 : 2;
 }

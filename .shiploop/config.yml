@@ -25,7 +25,14 @@ risk:
     - "**/billing/**"
     - "**/permissions/**"
     - .github/workflows/**
-    - "**/*lock*"
+    - "**/package-lock.json"
+    - "**/pnpm-lock.yaml"
+    - "**/yarn.lock"
+    - "**/Cargo.lock"
+    - "**/poetry.lock"
+    - "**/uv.lock"
+    - "**/go.sum"
+    - "**/Package.resolved"
   medium:
     - "**/api/**"
     - "**/config/**"
