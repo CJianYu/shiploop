@@ -1,5 +1,9 @@
 # Shiploop
 
+[![npm version](https://img.shields.io/npm/v/shiploop.svg)](https://www.npmjs.com/package/shiploop)
+[![CI](https://github.com/CJianYu/shiploop/actions/workflows/ci.yml/badge.svg)](https://github.com/CJianYu/shiploop/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **The fast path from agent output to trusted software.**
 
 Shiploop is an agent-agnostic local workflow for small tasks, focused proof, risk-aware review,
@@ -51,7 +55,7 @@ shiploop lane finish "Preserve session expiry"
 shiploop closeout
 ```
 
-Until the package is published, run it from this repository:
+To work on Shiploop itself from source:
 
 ```bash
 npm install
