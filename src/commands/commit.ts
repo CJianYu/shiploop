@@ -1,5 +1,5 @@
 import { lstat } from 'node:fs/promises';
-import { join, normalize } from 'node:path';
+import { join, posix } from 'node:path';
 import { loadConfig } from '../config.js';
 import { stagedFiles } from '../lib/git.js';
 import { runArgs } from '../lib/process.js';
@@ -13,8 +13,7 @@ async function validatePath(root: string, file: string): Promise<string> {
   if (!file || file === '.' || file === ':/' || /[*?[\]{}]/.test(file)) {
     throw new Error(`Unsafe path "${file}". List individual files explicitly.`);
   }
-  const clean = normalize(file).replace(/^\.\//, '');
-  if (clean.startsWith('../') || clean.startsWith('/')) throw new Error(`Path escapes the repository: ${file}`);
+  const clean = normalizeGitPath(file);
   try {
     const stat = await lstat(join(root, clean));
     if (stat.isDirectory()) throw new Error(`Directories are not accepted: ${file}`);
@@ -22,6 +21,16 @@ async function validatePath(root: string, file: string): Promise<string> {
     const tracked = await runArgs('git', ['ls-files', '--error-unmatch', '--', clean], root);
     if (tracked.code !== 0) throw error;
   }
+  return clean;
+}
+
+export function normalizeGitPath(file: string): string {
+  const portable = file.replaceAll('\\', '/');
+  if (posix.isAbsolute(portable) || /^[A-Za-z]:/.test(portable)) {
+    throw new Error(`Path escapes the repository: ${file}`);
+  }
+  const clean = posix.normalize(portable).replace(/^\.\//, '');
+  if (clean === '..' || clean.startsWith('../')) throw new Error(`Path escapes the repository: ${file}`);
   return clean;
 }
 

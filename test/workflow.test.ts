@@ -49,7 +49,7 @@ describe('safe workflow', () => {
     await writeFile(join(root, 'notes.txt'), 'unrelated\n');
     await proofCommand(root, {});
 
-    await commitCommand(root, ['src/index.js'], { message: 'feat(core): expose the answer' });
+    await commitCommand(root, ['src\\index.js'], { message: 'feat(core): expose the answer' });
     const committed = await run('git show --pretty="" --name-only HEAD', root);
     expect(committed.stdout.trim()).toBe('src/index.js');
     const status = await run('git status --short', root);
@@ -61,6 +61,8 @@ describe('safe workflow', () => {
     const root = await repository();
     await initCommand(root, { profile: 'solo-fast' });
     await expect(commitCommand(root, ['.'], { message: 'feat: unsafe' })).rejects.toThrow('Unsafe path');
+    await expect(commitCommand(root, ['C:\\repo\\secret.txt'], { message: 'feat: unsafe' })).rejects.toThrow('Path escapes');
+    await expect(commitCommand(root, ['..\\other-repo\\secret.txt'], { message: 'feat: unsafe' })).rejects.toThrow('Path escapes');
     await expect(commitCommand(root, ['package.json'], { message: 'update things' })).rejects.toThrow('Conventional Commits');
   });
 
