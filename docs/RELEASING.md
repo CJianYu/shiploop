@@ -7,8 +7,9 @@ does not use a long-lived npm write token.
 
 1. Create the public GitHub repository and set `repository.url`, `bugs.url`, and `homepage` in
    `package.json` to its exact URL.
-2. Publish the package once from a maintainer workstation with npm 2FA. This creates the package
-   settings page needed for trusted publishing.
+2. Publish the package once from a maintainer workstation with npm 2FA. Local workstations cannot
+   generate GitHub OIDC provenance, so use `npm publish --provenance=false` for this bootstrap publish
+   only. This creates the package settings page needed for trusted publishing.
 3. Configure npm's GitHub trusted publisher for the repository and `release.yml`. With npm CLI 11:
 
    ```bash
@@ -40,7 +41,9 @@ The npm owner, GitHub owner, repository, and workflow filename are case-sensitiv
 5. Create and push the matching tag, for example `v0.1.0`.
 
 The workflow rejects a tag that does not exactly match `package.json`. It then repeats all gates,
-publishes through OIDC, and creates GitHub release notes only after npm publication succeeds.
+publishes through OIDC, and creates GitHub release notes only after npm publication succeeds. A
+bootstrap version that is already present may proceed only when its npm `gitHead` exactly matches the
+tag commit; any other version collision fails closed.
 
 ## Recovery
 

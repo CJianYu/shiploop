@@ -30,7 +30,27 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
-      - run: npm publish
+      - name: Check for an identical published version
+        id: registry
+        shell: bash
+        run: |
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+          published_head=$(npm view "$package_name@$package_version" gitHead --json 2>/dev/null || true)
+          published_head=${published_head//\"/}
+
+          if [[ -z "$published_head" ]]; then
+            echo "already-published=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$published_head" == "$GITHUB_SHA" ]]; then
+            echo "Version $package_version is already published from this exact commit."
+            echo "already-published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version $package_version already exists with gitHead $published_head, not $GITHUB_SHA." >&2
+            exit 1
+          fi
+      - name: Publish to npm with provenance
+        if: steps.registry.outputs.already-published != 'true'
+        run: npm publish
       - name: Create GitHub release
         run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
         env:
