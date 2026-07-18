@@ -13,7 +13,7 @@ does not use a long-lived npm write token.
 
    ```bash
    npm trust github shiploop \
-     --repo OWNER/shiploop \
+     --repo CJianYu/shiploop \
      --file release.yml \
      --allow-publish \
      --yes

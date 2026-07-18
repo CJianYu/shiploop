@@ -28,6 +28,14 @@
     "atomic-commits"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CJianYu/shiploop.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CJianYu/shiploop/issues"
+  },
+  "homepage": "https://github.com/CJianYu/shiploop#readme",
   "publishConfig": {
     "access": "public",
     "provenance": true
