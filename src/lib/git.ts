@@ -1,0 +1,72 @@
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { runArgs } from './process.js';
+
+export async function isGitRepository(cwd: string): Promise<boolean> {
+  return (await runArgs('git', ['rev-parse', '--is-inside-work-tree'], cwd)).stdout.trim() === 'true';
+}
+
+export async function gitRoot(cwd: string): Promise<string> {
+  const result = await runArgs('git', ['rev-parse', '--show-toplevel'], cwd);
+  if (result.code !== 0) throw new Error('Not inside a Git repository.');
+  return result.stdout.trim();
+}
+
+export async function gitDir(cwd: string): Promise<string> {
+  const root = await gitRoot(cwd);
+  const result = await runArgs('git', ['rev-parse', '--git-dir'], cwd);
+  if (result.code !== 0) throw new Error('Cannot locate the Git directory.');
+  const value = result.stdout.trim();
+  return value.startsWith('/') ? value : join(root, value);
+}
+
+export async function currentBranch(cwd: string): Promise<string> {
+  const result = await runArgs('git', ['branch', '--show-current'], cwd);
+  return result.stdout.trim();
+}
+
+export async function defaultBranch(cwd: string): Promise<string> {
+  const remote = await runArgs('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], cwd);
+  if (remote.code === 0) return remote.stdout.trim().replace(/^origin\//, '');
+  for (const candidate of ['main', 'master']) {
+    const found = await runArgs('git', ['show-ref', '--verify', '--quiet', `refs/heads/${candidate}`], cwd);
+    if (found.code === 0) return candidate;
+  }
+  return await currentBranch(cwd) || 'main';
+}
+
+function lines(value: string): string[] {
+  return value.split('\n').map((line) => line.trim()).filter(Boolean);
+}
+
+export async function changedFiles(cwd: string): Promise<string[]> {
+  let tracked = await runArgs('git', ['diff', '--name-only', 'HEAD'], cwd);
+  if (tracked.code !== 0) tracked = await runArgs('git', ['diff', '--name-only'], cwd);
+  const untracked = await runArgs('git', ['ls-files', '--others', '--exclude-standard'], cwd);
+  return [...new Set([...lines(tracked.stdout), ...lines(untracked.stdout)])].sort();
+}
+
+export async function stagedFiles(cwd: string): Promise<string[]> {
+  return lines((await runArgs('git', ['diff', '--cached', '--name-only'], cwd)).stdout).sort();
+}
+
+export async function repositoryFingerprint(cwd: string): Promise<string> {
+  const root = await gitRoot(cwd);
+  const files = await changedFiles(root);
+  const hash = createHash('sha256');
+
+  for (const file of files) {
+    hash.update(file);
+    const trackedDiff = await runArgs('git', ['diff', 'HEAD', '--', file], root);
+    hash.update(trackedDiff.stdout);
+    if (!trackedDiff.stdout) {
+      try {
+        hash.update(await readFile(join(root, file)));
+      } catch {
+        hash.update('<deleted>');
+      }
+    }
+  }
+  return hash.digest('hex');
+}

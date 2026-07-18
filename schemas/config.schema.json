@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shiploop.dev/schemas/config.schema.json",
+  "title": "Shiploop configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "profile", "repository", "proof", "risk", "commit"],
+  "properties": {
+    "version": { "const": 1 },
+    "profile": { "enum": ["solo-fast", "team-pr", "regulated"] },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaultBranch", "strategy"],
+      "properties": {
+        "defaultBranch": { "type": "string", "minLength": 1 },
+        "strategy": { "enum": ["main-first", "short-branch", "pull-request"] }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requireFreshForCommit", "steps"],
+      "properties": {
+        "requireFreshForCommit": { "type": "boolean" },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "command", "required"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "command": { "type": "string", "minLength": 1 },
+              "required": { "type": "boolean" },
+              "quick": { "type": "boolean" },
+              "when": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["high", "medium"],
+      "properties": {
+        "high": { "type": "array", "items": { "type": "string" } },
+        "medium": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "commit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conventional", "maxSubjectLength"],
+      "properties": {
+        "conventional": { "type": "boolean" },
+        "maxSubjectLength": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

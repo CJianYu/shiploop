@@ -1,0 +1,36 @@
+version: 1
+profile: team-pr
+repository:
+  defaultBranch: main
+  strategy: short-branch
+proof:
+  requireFreshForCommit: true
+  steps:
+    - name: check
+      command: npm run check
+      required: true
+      quick: true
+    - name: test
+      command: npm run test
+      required: true
+      quick: false
+    - name: build
+      command: npm run build
+      required: true
+      quick: false
+risk:
+  high:
+    - "**/migrations/**"
+    - "**/auth/**"
+    - "**/billing/**"
+    - "**/permissions/**"
+    - .github/workflows/**
+    - "**/*lock*"
+  medium:
+    - "**/api/**"
+    - "**/config/**"
+    - "**/scripts/**"
+    - "**/*.sql"
+commit:
+  conventional: true
+  maxSubjectLength: 72

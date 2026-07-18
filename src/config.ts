@@ -1,0 +1,103 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { parse, stringify } from 'yaml';
+import type { Profile, ShiploopConfig } from './types.js';
+
+export const CONFIG_PATH = '.shiploop/config.yml';
+
+const profileStrategy: Record<Profile, ShiploopConfig['repository']['strategy']> = {
+  'solo-fast': 'main-first',
+  'team-pr': 'short-branch',
+  regulated: 'pull-request',
+};
+
+export function baseConfig(profile: Profile): ShiploopConfig {
+  return {
+    version: 1,
+    profile,
+    repository: {
+      defaultBranch: 'main',
+      strategy: profileStrategy[profile],
+    },
+    proof: {
+      requireFreshForCommit: profile !== 'solo-fast',
+      steps: [],
+    },
+    risk: {
+      high: [
+        '**/migrations/**',
+        '**/auth/**',
+        '**/billing/**',
+        '**/permissions/**',
+        '.github/workflows/**',
+        '**/*lock*',
+      ],
+      medium: ['**/api/**', '**/config/**', '**/scripts/**', '**/*.sql'],
+    },
+    commit: {
+      conventional: true,
+      maxSubjectLength: 72,
+    },
+  };
+}
+
+export async function loadConfig(root: string): Promise<ShiploopConfig> {
+  const path = join(root, CONFIG_PATH);
+  let value: unknown;
+  try {
+    value = parse(await readFile(path, 'utf8'));
+  } catch (error) {
+    throw new Error(`Cannot read ${CONFIG_PATH}: ${(error as Error).message}`);
+  }
+  assertConfig(value);
+  return value;
+}
+
+export function serializeConfig(config: ShiploopConfig): string {
+  return stringify(config, { lineWidth: 100 });
+}
+
+function assertConfig(value: unknown): asserts value is ShiploopConfig {
+  if (!value || typeof value !== 'object') throw new Error('Configuration must be a YAML object.');
+  const config = value as Partial<ShiploopConfig>;
+  if (config.version !== 1) throw new Error('Unsupported configuration version. Expected version: 1.');
+  if (!['solo-fast', 'team-pr', 'regulated'].includes(config.profile ?? '')) {
+    throw new Error('profile must be solo-fast, team-pr, or regulated.');
+  }
+  if (!config.repository || !config.proof || !config.risk || !config.commit) {
+    throw new Error('Configuration is missing a required section.');
+  }
+  if (typeof config.repository.defaultBranch !== 'string' || !config.repository.defaultBranch) {
+    throw new Error('repository.defaultBranch must be a non-empty string.');
+  }
+  if (!['main-first', 'short-branch', 'pull-request'].includes(config.repository.strategy)) {
+    throw new Error('repository.strategy is invalid.');
+  }
+  if (typeof config.proof.requireFreshForCommit !== 'boolean' || !Array.isArray(config.proof.steps)) {
+    throw new Error('proof requires requireFreshForCommit and a steps array.');
+  }
+  for (const [index, step] of config.proof.steps.entries()) {
+    if (!step || typeof step.name !== 'string' || !step.name || typeof step.command !== 'string' || !step.command) {
+      throw new Error(`proof.steps[${index}] requires non-empty name and command strings.`);
+    }
+    if (typeof step.required !== 'boolean') throw new Error(`proof.steps[${index}].required must be boolean.`);
+    if (step.quick !== undefined && typeof step.quick !== 'boolean') {
+      throw new Error(`proof.steps[${index}].quick must be boolean.`);
+    }
+    if (step.when !== undefined && (!Array.isArray(step.when) || step.when.some((item) => typeof item !== 'string'))) {
+      throw new Error(`proof.steps[${index}].when must be an array of strings.`);
+    }
+  }
+  if (!isStringArray(config.risk.high) || !isStringArray(config.risk.medium)) {
+    throw new Error('risk.high and risk.medium must be arrays of strings.');
+  }
+  if (typeof config.commit.conventional !== 'boolean'
+    || !Number.isInteger(config.commit.maxSubjectLength)
+    || config.commit.maxSubjectLength < 1) {
+    throw new Error('commit requires conventional and a positive maxSubjectLength.');
+  }
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
