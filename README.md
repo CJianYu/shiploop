@@ -136,7 +136,8 @@ Shiploop conservatively rejects overlapping static path prefixes. `--allow-overl
 coordinated exceptions, not as a default escape hatch.
 
 See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for design trade-offs and
-[docs/ADOPTION.md](docs/ADOPTION.md) for gradual rollout.
+[docs/ADOPTION.md](docs/ADOPTION.md) for gradual rollout. Maintainers should follow
+[docs/RELEASING.md](docs/RELEASING.md) for tokenless automated publication.
 
 ## Non-goals
 

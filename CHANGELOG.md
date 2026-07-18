@@ -16,3 +16,4 @@ Keep a Changelog categories.
 - Agent-ready context packets combining task, proof, risk, and active ownership.
 - Local parallel lane coordination with conservative overlap detection.
 - Idempotent, independently installable hooks that preserve existing repository automation.
+- OIDC-based npm release automation with tag/version verification and generated GitHub releases.
