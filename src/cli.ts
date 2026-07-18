@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command, Option } from 'commander';
+import { readFileSync } from 'node:fs';
 import { closeoutCommand } from './commands/closeout.js';
 import { commitCommand } from './commands/commit.js';
 import { doctorCommand } from './commands/doctor.js';
@@ -12,6 +13,7 @@ import type { Profile } from './types.js';
 import { ui } from './ui.js';
 
 const program = new Command();
+const packageVersion = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 async function root(): Promise<string> {
   const cwd = process.cwd();
@@ -21,7 +23,7 @@ async function root(): Promise<string> {
 program
   .name('shiploop')
   .description('Prove, review, and ship small changes with any coding agent.')
-  .version('0.1.0')
+  .version(packageVersion)
   .showSuggestionAfterError();
 
 program.command('init')

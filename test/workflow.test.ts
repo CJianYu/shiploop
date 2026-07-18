@@ -1,10 +1,11 @@
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { commitCommand } from '../src/commands/commit.js';
 import { initCommand } from '../src/commands/init.js';
 import { proofCommand } from '../src/commands/proof.js';
+import { taskCommand } from '../src/commands/task.js';
 import { run } from '../src/lib/process.js';
 import { hasFreshReceipt } from '../src/proof-state.js';
 import { readReceipt } from '../src/proof-state.js';
@@ -92,5 +93,12 @@ commit:
     } finally {
       process.exitCode = previousExitCode;
     }
+  });
+
+  it('keeps non-Latin task titles readable', async () => {
+    const root = await repository();
+    await taskCommand(root, '修复登录超时', { owner: 'agent-1' });
+    const file = join(root, '.shiploop/tasks/修复登录超时.md');
+    await expect(access(file)).resolves.toBeUndefined();
   });
 });

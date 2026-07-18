@@ -3,6 +3,10 @@ set -eu
 
 if command -v shiploop >/dev/null 2>&1; then
   shiploop proof --staged --quick
+elif [ -x node_modules/.bin/shiploop ]; then
+  node_modules/.bin/shiploop proof --staged --quick
+elif [ -f dist/cli.js ] && [ "$(node -p "require('./package.json').name" 2>/dev/null || true)" = "shiploop" ]; then
+  node dist/cli.js proof --staged --quick
 else
   echo "shiploop is not installed; skipping project hook" >&2
 fi
