@@ -47,3 +47,7 @@ own dangerous surfaces in `.shiploop/config.yml`.
 Shiploop coordinates artifacts and evidence rather than agent sessions. A task brief is Markdown,
 a proof step is a shell command, a review is based on Git paths, and a commit is ordinary Git. This
 keeps the workflow usable when models, tools, and pricing change.
+
+Untracked dependency and compiler caches such as `node_modules`, `.venv`, `target`, and `.build` are
+excluded from the change surface even when a new repository has not created `.gitignore` yet.
+Tracked files remain visible regardless of their directory.

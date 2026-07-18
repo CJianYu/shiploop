@@ -3,6 +3,15 @@ import { lstat, readFile, readlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runArgs } from './process.js';
 
+const BUILTIN_UNTRACKED_EXCLUDES = [
+  'node_modules/**',
+  '.venv/**',
+  'venv/**',
+  'target/**',
+  '.build/**',
+  '**/__pycache__/**',
+];
+
 export async function isGitRepository(cwd: string): Promise<boolean> {
   return (await runArgs('git', ['rev-parse', '--is-inside-work-tree'], cwd)).stdout.trim() === 'true';
 }
@@ -51,7 +60,12 @@ function lines(value: string): string[] {
 export async function changedFiles(cwd: string): Promise<string[]> {
   let tracked = await runArgs('git', ['diff', '--name-only', 'HEAD'], cwd);
   if (tracked.code !== 0) tracked = await runArgs('git', ['diff', '--name-only'], cwd);
-  const untracked = await runArgs('git', ['ls-files', '--others', '--exclude-standard'], cwd);
+  const untracked = await runArgs('git', [
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    ...BUILTIN_UNTRACKED_EXCLUDES.map((pattern) => `--exclude=${pattern}`),
+  ], cwd);
   return [...new Set([...lines(tracked.stdout), ...lines(untracked.stdout)])].sort();
 }
 
