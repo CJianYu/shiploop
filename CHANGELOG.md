@@ -15,3 +15,4 @@ Keep a Changelog categories.
 - Agent-lane task briefs and release closeout checks.
 - Agent-ready context packets combining task, proof, risk, and active ownership.
 - Local parallel lane coordination with conservative overlap detection.
+- Idempotent, independently installable hooks that preserve existing repository automation.

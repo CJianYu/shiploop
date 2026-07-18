@@ -1,9 +1,9 @@
-import { access, chmod, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { baseConfig, CONFIG_PATH, serializeConfig } from '../config.js';
 import { detectStacks } from '../detect.js';
+import { installHooks } from '../hooks.js';
 import { defaultBranch, isGitRepository } from '../lib/git.js';
-import { runArgs } from '../lib/process.js';
 import type { Profile } from '../types.js';
 import { ui } from '../ui.js';
 
@@ -20,20 +20,6 @@ Ship small, coherent changes. Keep agent context narrow and prove every change l
 7. Finish the lane and prefer forward fixes. Do not hide failures or unrelated work.
 
 Never weaken a proof command merely to get a green result.
-`;
-
-const preCommitHook = `#!/usr/bin/env sh
-set -eu
-
-if command -v shiploop >/dev/null 2>&1; then
-  shiploop proof --staged --quick
-elif [ -x node_modules/.bin/shiploop ]; then
-  node_modules/.bin/shiploop proof --staged --quick
-elif [ -f dist/cli.js ] && [ "$(node -p "require('./package.json').name" 2>/dev/null || true)" = "shiploop" ]; then
-  node dist/cli.js proof --staged --quick
-else
-  echo "shiploop is not installed; skipping project hook" >&2
-fi
 `;
 
 async function pathExists(path: string): Promise<boolean> {
@@ -62,13 +48,7 @@ export async function initCommand(
   await writeFile(join(cwd, '.shiploop/tasks/.gitkeep'), '');
 
   if (options.hooks) {
-    const hookDir = join(cwd, '.githooks');
-    const hookPath = join(hookDir, 'pre-commit');
-    await mkdir(hookDir, { recursive: true });
-    await writeFile(hookPath, preCommitHook);
-    await chmod(hookPath, 0o755);
-    const configured = await runArgs('git', ['config', 'core.hooksPath', '.githooks'], cwd);
-    if (configured.code !== 0) throw new Error(configured.stderr || 'Could not configure Git hooks.');
+    await installHooks(cwd, { force: Boolean(options.force) });
   }
 
   ui.ok(`Created ${CONFIG_PATH} with the ${options.profile} profile.`);

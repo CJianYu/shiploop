@@ -30,10 +30,11 @@ current diff.
 ## Stage 4: repository hook
 
 ```bash
-shiploop init --profile team-pr --hooks --force
+shiploop hooks install
 ```
 
-This creates `.githooks/pre-commit` and sets the repository-local `core.hooksPath`. The hook runs
+This creates `.githooks/pre-commit` and sets the repository-local `core.hooksPath`. Existing hooks
+and custom hook directories are left untouched unless `--force` is explicitly supplied. The hook runs
 only steps marked `quick: true`; it cannot issue the full-proof receipt required by a protected
 commit. It does not alter global Git configuration. Teams should commit the hook and config, review
 changes like code, and provide a documented emergency bypass policy.

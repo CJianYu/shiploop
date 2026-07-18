@@ -5,6 +5,7 @@ import { closeoutCommand } from './commands/closeout.js';
 import { commitCommand } from './commands/commit.js';
 import { contextCommand } from './commands/context.js';
 import { doctorCommand } from './commands/doctor.js';
+import { hooksInstallCommand, hooksStatusCommand } from './commands/hooks.js';
 import { initCommand } from './commands/init.js';
 import { laneFinishCommand, laneStartCommand, laneStatusCommand } from './commands/lane.js';
 import { proofCommand } from './commands/proof.js';
@@ -41,6 +42,16 @@ program.command('doctor')
   .description('Diagnose repository readiness without changing it')
   .option('--json', 'emit machine-readable output')
   .action(async (options: { json?: boolean }) => doctorCommand(await root(), options));
+
+const hooks = program.command('hooks').description('Install or inspect repository-local Git hooks');
+hooks.command('install')
+  .description('Install the Shiploop pre-commit hook without changing workflow config')
+  .option('--force', 'replace an existing hooks path or pre-commit hook after review')
+  .action(async (options: { force?: boolean }) => hooksInstallCommand(await root(), options));
+hooks.command('status')
+  .description('Inspect hook ownership and Git configuration')
+  .option('--json', 'emit machine-readable output')
+  .action(async (options: { json?: boolean }) => hooksStatusCommand(await root(), options));
 
 program.command('task')
   .description('Create a bounded task brief for one agent lane')

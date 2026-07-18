@@ -1,16 +1,11 @@
-import { access } from 'node:fs/promises';
-import { join } from 'node:path';
 import { CONFIG_PATH, loadConfig } from '../config.js';
 import { detectStacks } from '../detect.js';
+import { hookStatus } from '../hooks.js';
 import { currentBranch, isGitRepository } from '../lib/git.js';
 import { runArgs } from '../lib/process.js';
 import { ui } from '../ui.js';
 
 interface Check { name: string; status: 'pass' | 'warn' | 'fail'; detail: string }
-
-async function exists(path: string): Promise<boolean> {
-  try { await access(path); return true; } catch { return false; }
-}
 
 function executableFrom(command: string): string | undefined {
   const match = command.trim().match(/^([A-Za-z0-9_.-]+)/);
@@ -56,12 +51,15 @@ export async function doctorCommand(cwd: string, options: { json?: boolean }): P
     detail: branch ? `Current branch: ${branch}` : 'Detached HEAD',
   });
 
-  const hookPath = join(cwd, '.githooks/pre-commit');
-  const hooksSetting = (await runArgs('git', ['config', '--get', 'core.hooksPath'], cwd)).stdout.trim();
-  const hookReady = hooksSetting === '.githooks' && await exists(hookPath);
+  const hooks = await hookStatus(cwd);
+  const hookReady = hooks.configured && hooks.managed;
   checks.push({
     name: 'hooks', status: hookReady ? 'pass' : 'warn',
-    detail: hookReady ? 'Repository-local hook enabled' : 'Hooks not enabled (optional)',
+    detail: hookReady
+      ? 'Managed repository-local hook enabled'
+      : hooks.present && !hooks.managed
+        ? 'Non-Shiploop hook present; left untouched'
+        : 'Hooks not enabled (optional)',
   });
   finish(checks, options.json);
 }

@@ -18,6 +18,7 @@ bottleneck. Shiploop turns repository policy into executable commands:
 
 - `shiploop init` detects Node.js, Python, Go, Rust, and Swift repositories.
 - `shiploop doctor` checks that the local fast path is actually usable.
+- `shiploop hooks install` adds a quick repository-local hook without rewriting workflow config.
 - `shiploop task` creates one-context task briefs with explicit ownership boundaries.
 - `shiploop context` emits a compact repository and task packet for any coding agent.
 - `shiploop lane` coordinates parallel write surfaces and rejects likely overlap.
@@ -57,6 +58,16 @@ npm install
 npm run build
 npm link
 ```
+
+Hooks are optional. For an already initialized repository, install them independently:
+
+```bash
+shiploop hooks install
+shiploop hooks status
+```
+
+Shiploop refuses to replace an existing `core.hooksPath` or pre-commit file unless `--force` is
+explicitly supplied. It never changes global Git configuration.
 
 ## Safety profiles
 
