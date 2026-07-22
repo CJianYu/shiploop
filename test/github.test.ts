@@ -35,6 +35,7 @@ function rawPullRequest(head: string): Record<string, unknown> {
     files: [{ path: 'src/auth/session.ts' }],
     changedFiles: 1,
     requiresStrictStatusChecks: true,
+    protectionEnforcedForAdmins: true,
     requiresMergeQueue: false,
     branchRulesKnown: true,
     statusCheckRollup: [
@@ -164,6 +165,16 @@ describe('GitHub PR control plane', () => {
     raw.requiresStrictStatusChecks = false;
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
     expect(value.blockers).toContain('Base branch does not require strict up-to-date status checks.');
+    expect(value.readyToMerge).toBe(false);
+  });
+
+  it('requires branch protection to apply to administrators', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.protectionEnforcedForAdmins = false;
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.blockers).toContain('Base branch protection is not enforced for administrators.');
     expect(value.readyToMerge).toBe(false);
   });
 

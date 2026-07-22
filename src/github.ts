@@ -32,6 +32,7 @@ export interface PullRequestSnapshot {
   listedFileCount: number;
   changedFileCount: number;
   requiresStrictStatusChecks: boolean;
+  protectionEnforcedForAdmins: boolean;
   requiresMergeQueue: boolean;
   branchRulesKnown: boolean;
   checks: PullRequestCheck[];
@@ -133,6 +134,7 @@ export function parsePullRequest(value: unknown): PullRequestSnapshot {
     listedFileCount: files.length,
     changedFileCount: typeof raw.changedFiles === 'number' ? raw.changedFiles : files.length,
     requiresStrictStatusChecks: raw.requiresStrictStatusChecks === true,
+    protectionEnforcedForAdmins: raw.protectionEnforcedForAdmins === true,
     requiresMergeQueue: raw.requiresMergeQueue === true,
     branchRulesKnown: raw.branchRulesKnown === true,
     checks: normalizeChecks(raw.statusCheckRollup),
@@ -159,10 +161,12 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
     snapshot.files = parsedFiles.paths;
     snapshot.listedFileCount = parsedFiles.fileCount;
     const protectionResult = await runArgs('gh', [
-      'api', `repos/${repository}/branches/${encodeURIComponent(snapshot.baseRefName)}/protection/required_status_checks`,
+      'api', `repos/${repository}/branches/${encodeURIComponent(snapshot.baseRefName)}/protection`,
     ], root);
     if (protectionResult.code === 0) {
-      snapshot.requiresStrictStatusChecks = object(JSON.parse(protectionResult.stdout)).strict === true;
+      const protection = object(JSON.parse(protectionResult.stdout));
+      snapshot.requiresStrictStatusChecks = object(protection.required_status_checks).strict === true;
+      snapshot.protectionEnforcedForAdmins = object(protection.enforce_admins).enabled === true;
     }
     const rulesResult = await runArgs('gh', [
       'api', `repos/${repository}/rules/branches/${encodeURIComponent(snapshot.baseRefName)}`,
@@ -246,6 +250,9 @@ export async function assessPullRequest(
   if (snapshot.isDraft) blockers.push('PR is still a draft.');
   if (!snapshot.requiresStrictStatusChecks) {
     blockers.push('Base branch does not require strict up-to-date status checks.');
+  }
+  if (!snapshot.protectionEnforcedForAdmins) {
+    blockers.push('Base branch protection is not enforced for administrators.');
   }
   if (!snapshot.branchRulesKnown) blockers.push('GitHub branch rules could not be verified.');
   if (snapshot.requiresMergeQueue) blockers.push('Base branch requires a merge queue, which exact-diff merge does not support.');

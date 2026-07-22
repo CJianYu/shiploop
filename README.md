@@ -34,6 +34,7 @@ bottleneck. Shiploop turns repository policy into executable commands:
 - `shiploop pr inspect` combines GitHub checks, changed-file risk, reviews, and local evidence.
 - `shiploop pr checks --logs` surfaces failing Actions logs without hiding red checks.
 - `shiploop pr merge` merges only after policy gates and exact-number confirmation.
+- Guarded merges require strict up-to-date checks and branch protection enforced for administrators.
 
 No model is hard-coded. Use Shiploop with Codex, Claude Code, Cursor, a shell script, or a human.
 

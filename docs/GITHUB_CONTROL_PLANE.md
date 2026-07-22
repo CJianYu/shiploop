@@ -73,10 +73,11 @@ ceiling. The assessed head SHA is sent to GitHub, closing the window where a new
 inherit an earlier decision. Shiploop performs the merge immediately rather than leaving asynchronous
 auto-merge armed, because GitHub cannot pin the assessed base SHA while waiting. GitHub branch
 protection remains the final merge authority and may still reject the operation. To close the final
-base-branch race, Shiploop requires the target branch to enforce strict up-to-date status checks;
-this may come from classic branch protection or an active ruleset. Without that remote invariant,
-`pr merge` fails closed. Merge-queue branches are also rejected because an asynchronously queued
-merge cannot preserve Shiploop's exact-base evidence guarantee.
+base-branch race, Shiploop requires the target branch to enforce strict up-to-date status checks and
+classic branch protection for administrators. The strict-check rule may come from classic branch
+protection or an active ruleset, but ruleset-only protection cannot currently prove that the merging
+actor lacks a bypass and therefore fails closed. Merge-queue branches are also rejected because an
+asynchronously queued merge cannot preserve Shiploop's exact-base evidence guarantee.
 
 Risk overrides are visible and bounded:
 
