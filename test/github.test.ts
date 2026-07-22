@@ -34,6 +34,7 @@ function rawPullRequest(head: string): Record<string, unknown> {
     reviewDecision: 'APPROVED',
     files: [{ path: 'src/auth/session.ts' }],
     changedFiles: 1,
+    requiresStrictStatusChecks: true,
     statusCheckRollup: [
       { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/2', status: 'COMPLETED', conclusion: 'SUCCESS', completedAt: '2026-01-01T00:01:00Z' },
     ],
@@ -151,6 +152,16 @@ describe('GitHub PR control plane', () => {
     raw.mergeStateStatus = 'UNKNOWN';
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
     expect(value.blockers).toContain('GitHub merge state is UNKNOWN, not clean.');
+    expect(value.readyToMerge).toBe(false);
+  });
+
+  it('requires remote strict status checks to close the base race', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.requiresStrictStatusChecks = false;
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.blockers).toContain('Base branch does not require strict up-to-date status checks.');
     expect(value.readyToMerge).toBe(false);
   });
 

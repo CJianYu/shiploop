@@ -31,6 +31,7 @@ export interface PullRequestSnapshot {
   files: string[];
   listedFileCount: number;
   changedFileCount: number;
+  requiresStrictStatusChecks: boolean;
   checks: PullRequestCheck[];
 }
 
@@ -129,6 +130,7 @@ export function parsePullRequest(value: unknown): PullRequestSnapshot {
     files,
     listedFileCount: files.length,
     changedFileCount: typeof raw.changedFiles === 'number' ? raw.changedFiles : files.length,
+    requiresStrictStatusChecks: raw.requiresStrictStatusChecks === true,
     checks: normalizeChecks(raw.statusCheckRollup),
   };
 }
@@ -152,6 +154,12 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
     const parsedFiles = parsePullRequestFiles(JSON.parse(filesResult.stdout));
     snapshot.files = parsedFiles.paths;
     snapshot.listedFileCount = parsedFiles.fileCount;
+    const protectionResult = await runArgs('gh', [
+      'api', `repos/${repository}/branches/${encodeURIComponent(snapshot.baseRefName)}/protection/required_status_checks`,
+    ], root);
+    if (protectionResult.code === 0) {
+      snapshot.requiresStrictStatusChecks = object(JSON.parse(protectionResult.stdout)).strict === true;
+    }
     return snapshot;
   } catch (error) {
     throw new Error(`Cannot parse the GitHub pull request: ${(error as Error).message}`);
@@ -214,6 +222,9 @@ export async function assessPullRequest(
   const blockers: string[] = [];
   if (snapshot.state !== 'OPEN') blockers.push(`PR is ${snapshot.state.toLowerCase()}, not open.`);
   if (snapshot.isDraft) blockers.push('PR is still a draft.');
+  if (!snapshot.requiresStrictStatusChecks) {
+    blockers.push('Base branch does not require strict up-to-date status checks.');
+  }
   if (snapshot.mergeStateStatus === 'DIRTY') blockers.push('PR has merge conflicts.');
   else if (snapshot.mergeStateStatus !== 'CLEAN') {
     blockers.push(`GitHub merge state is ${snapshot.mergeStateStatus || 'unknown'}, not clean.`);
