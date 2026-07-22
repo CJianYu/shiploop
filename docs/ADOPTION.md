@@ -66,7 +66,7 @@ Install and authenticate the GitHub CLI, then record evidence only after the fin
 ```bash
 shiploop evidence run \
   --kind review \
-  --summary "Source-aware review clean" \
+  --summary "Source-aware review completed" \
   --command "codex review --base origin/main"
 
 shiploop evidence add \

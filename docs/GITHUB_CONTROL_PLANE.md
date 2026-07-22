@@ -25,12 +25,14 @@ Use `evidence run` when a command can establish the claim:
 ```bash
 shiploop evidence run \
   --kind review \
-  --summary "Codex source-aware review clean" \
+  --summary "Codex source-aware review completed" \
   --command "codex review --base origin/main"
 ```
 
 The record is written only when the worktree and index are clean, the command exits successfully,
 and the Git head remains stable. Concurrent writers are serialized in Git's common directory.
+Use a review adapter that exits nonzero when actionable findings should block a merge if your policy
+requires a clean result rather than proof that a review was completed.
 Use `evidence add` for proof that lives outside the terminal, such as a browser recording, device
 test, deployment preview, or externally hosted security report. This is explicitly marked as an
 attestation rather than command-verified evidence.

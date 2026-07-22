@@ -55,7 +55,7 @@ shiploop context --task "Preserve session expiry"
 shiploop proof
 shiploop review --diff
 shiploop commit -m "fix(auth): preserve session expiry" -- src/auth/session.ts test/session.test.ts
-shiploop evidence run --kind review --summary "Source-aware review clean" --command "codex review --base origin/main"
+shiploop evidence run --kind review --summary "Source-aware review completed" --command "codex review --base origin/main"
 shiploop evidence add --kind real --summary "Session expiry reproduced and fixed" --url "https://example.com/artifact"
 shiploop pr inspect
 shiploop pr brief
