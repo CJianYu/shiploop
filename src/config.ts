@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse, stringify } from 'yaml';
-import type { Profile, ShiploopConfig } from './types.js';
+import type { EvidenceKind, Profile, ShiploopConfig } from './types.js';
 
 export const CONFIG_PATH = '.shiploop/config.yml';
 
@@ -25,6 +25,7 @@ export function baseConfig(profile: Profile): ShiploopConfig {
     },
     risk: {
       high: [
+        '.shiploop/config.yml',
         '**/migrations/**',
         '**/auth/**',
         '**/billing/**',
@@ -45,17 +46,35 @@ export function baseConfig(profile: Profile): ShiploopConfig {
       conventional: true,
       maxSubjectLength: 72,
     },
+    github: {
+      requiredEvidence: profile === 'regulated' ? ['review', 'real'] : profile === 'team-pr' ? ['review'] : [],
+      maxMergeRisk: 'low',
+      requireApproval: profile === 'regulated',
+      mergeMethod: 'squash',
+    },
+  };
+}
+
+export function githubPolicy(config: ShiploopConfig): NonNullable<ShiploopConfig['github']> {
+  return config.github ?? {
+    requiredEvidence: [],
+    maxMergeRisk: 'low',
+    requireApproval: false,
+    mergeMethod: 'squash',
   };
 }
 
 export async function loadConfig(root: string): Promise<ShiploopConfig> {
   const path = join(root, CONFIG_PATH);
-  let value: unknown;
   try {
-    value = parse(await readFile(path, 'utf8'));
+    return parseConfigText(await readFile(path, 'utf8'));
   } catch (error) {
     throw new Error(`Cannot read ${CONFIG_PATH}: ${(error as Error).message}`);
   }
+}
+
+export function parseConfigText(contents: string): ShiploopConfig {
+  const value: unknown = parse(contents);
   assertConfig(value);
   return value;
 }
@@ -102,6 +121,22 @@ function assertConfig(value: unknown): asserts value is ShiploopConfig {
     || !Number.isInteger(config.commit.maxSubjectLength)
     || config.commit.maxSubjectLength < 1) {
     throw new Error('commit requires conventional and a positive maxSubjectLength.');
+  }
+  if (config.github !== undefined) {
+    const validEvidence: EvidenceKind[] = ['proof', 'real', 'review', 'security'];
+    if (!Array.isArray(config.github.requiredEvidence)
+      || config.github.requiredEvidence.some((item) => !validEvidence.includes(item))) {
+      throw new Error('github.requiredEvidence contains an unsupported evidence kind.');
+    }
+    if (!['low', 'medium', 'high'].includes(config.github.maxMergeRisk)) {
+      throw new Error('github.maxMergeRisk must be low, medium, or high.');
+    }
+    if (typeof config.github.requireApproval !== 'boolean') {
+      throw new Error('github.requireApproval must be boolean.');
+    }
+    if (!['squash', 'merge', 'rebase'].includes(config.github.mergeMethod)) {
+      throw new Error('github.mergeMethod must be squash, merge, or rebase.');
+    }
   }
 }
 

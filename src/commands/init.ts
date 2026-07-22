@@ -17,7 +17,9 @@ Ship small, coherent changes. Keep agent context narrow and prove every change l
 4. Run \`shiploop proof\` after implementation.
 5. Run \`shiploop review\` and deeply inspect high-risk files.
 6. Commit explicit files with \`shiploop commit -m "type(scope): subject" -- file...\`.
-7. Finish the lane and prefer forward fixes. Do not hide failures or unrelated work.
+7. Record real-behavior and source-aware review evidence against the final Git head.
+8. Inspect PR readiness with \`shiploop pr inspect\`; never bypass a remote gate silently.
+9. Finish the lane and prefer forward fixes. Do not hide failures or unrelated work.
 
 Never weaken a proof command merely to get a green result.
 `;

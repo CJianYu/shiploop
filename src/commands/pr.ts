@@ -1,0 +1,137 @@
+import { githubPolicy } from '../config.js';
+import { assessPullRequest, fetchBaseConfig, fetchPullRequest, repositoryFromPullRequestUrl, type PullRequestAssessment, type PullRequestSnapshot } from '../github.js';
+import { runArgs } from '../lib/process.js';
+import type { PolicyRiskLevel } from '../types.js';
+import { ui } from '../ui.js';
+
+function printable(snapshot: PullRequestSnapshot, assessment: PullRequestAssessment): object {
+  return {
+    pullRequest: snapshot,
+    readiness: assessment,
+  };
+}
+
+function printSummary(snapshot: PullRequestSnapshot, assessment: PullRequestAssessment): void {
+  ui.heading(`PR #${snapshot.number}: ${snapshot.title}`);
+  ui.info(`${snapshot.headRefName} → ${snapshot.baseRefName} · ${snapshot.files.length} file(s) · ${assessment.risk} risk`);
+  console.log(`URL: ${snapshot.url}`);
+  console.log(`Checks: ${assessment.checks.passing.length} passing, ${assessment.checks.pending.length} pending, ${assessment.checks.failing.length} failing`);
+  console.log(`Evidence: ${assessment.evidence.length ? assessment.evidence.map((item) => item.kind).join(', ') : 'none for this head'}`);
+  if (assessment.readyToMerge) ui.ok('Ready for a policy-bounded merge.');
+  else {
+    ui.warn('Not ready to arm:');
+    for (const blocker of assessment.blockers) console.log(`  - ${blocker}`);
+  }
+}
+
+async function snapshotAndAssessment(
+  cwd: string,
+  selector: string | undefined,
+  allowRisk?: PolicyRiskLevel,
+): Promise<{ snapshot: PullRequestSnapshot; assessment: PullRequestAssessment; config: Awaited<ReturnType<typeof fetchBaseConfig>> }> {
+  const snapshot = await fetchPullRequest(cwd, selector);
+  const config = await fetchBaseConfig(cwd, snapshot);
+  const assessment = await assessPullRequest(cwd, snapshot, config, { ...(allowRisk ? { allowRisk } : {}) });
+  return { snapshot, assessment, config };
+}
+
+export async function prInspectCommand(
+  cwd: string,
+  selector: string | undefined,
+  options: { json?: boolean },
+): Promise<void> {
+  const { snapshot, assessment } = await snapshotAndAssessment(cwd, selector);
+  if (options.json) console.log(JSON.stringify(printable(snapshot, assessment), null, 2));
+  else printSummary(snapshot, assessment);
+}
+
+export async function prChecksCommand(
+  cwd: string,
+  selector: string | undefined,
+  options: { logs?: boolean; json?: boolean },
+): Promise<void> {
+  const { snapshot, assessment } = await snapshotAndAssessment(cwd, selector);
+  if (options.json) {
+    console.log(JSON.stringify({ number: snapshot.number, checks: assessment.checks }, null, 2));
+    if (!snapshot.checksKnown || assessment.checks.failing.length) process.exitCode = 1;
+    else if (assessment.checks.pending.length) process.exitCode = 8;
+    return;
+  }
+  ui.heading(`Checks for PR #${snapshot.number}`);
+  for (const check of snapshot.checks) {
+    const marker = check.state === 'passing' ? '✓' : check.state === 'failing' ? '✗' : '…';
+    console.log(`${marker} ${check.name}${check.url ? ` · ${check.url}` : ''}`);
+  }
+  if (!snapshot.checksKnown) {
+    ui.fail('The complete GitHub check rollup could not be verified.');
+    process.exitCode = 1;
+    return;
+  }
+  if (options.logs && assessment.checks.failing.length) {
+    const runIds = [...new Set(assessment.checks.failing.flatMap((check) => {
+      const match = check.url?.match(/\/actions\/runs\/(\d+)/);
+      return match?.[1] ? [match[1]] : [];
+    }))];
+    if (!runIds.length) ui.warn('Failing checks do not expose GitHub Actions run URLs.');
+    for (const id of runIds) {
+      ui.info(`Failed logs from run ${id}`);
+      const repository = repositoryFromPullRequestUrl(snapshot.url);
+      const result = await runArgs('gh', [
+        'run', 'view', id, '--log-failed', ...(repository ? ['--repo', repository] : []),
+      ], cwd, { inherit: true });
+      if (result.code !== 0) process.exitCode = result.code;
+    }
+  }
+  if (assessment.checks.failing.length) process.exitCode = 1;
+  else if (assessment.checks.pending.length) process.exitCode = 8;
+}
+
+export async function prBriefCommand(cwd: string, selector?: string): Promise<void> {
+  const { snapshot, assessment } = await snapshotAndAssessment(cwd, selector);
+  console.log('## Shiploop readiness');
+  console.log(`\n- Head: \`${snapshot.headSha}\``);
+  console.log(`- Change surface: ${snapshot.files.length} file(s), **${assessment.risk} risk**`);
+  console.log(`- Checks: ${assessment.checks.passing.length} passing, ${assessment.checks.pending.length} pending, ${assessment.checks.failing.length} failing`);
+  console.log('\n### Evidence');
+  if (!assessment.evidence.length) console.log('\n- No evidence recorded for this exact head.');
+  for (const item of assessment.evidence) {
+    const suffix = item.url ? ` ([artifact](${item.url}))` : '';
+    const source = item.source === 'command' ? 'command-verified' : 'attested';
+    console.log(`\n- **${item.kind} (${source})**: ${item.summary}${suffix}`);
+    if (item.command) console.log(`  - Command: \`${item.command.replaceAll('`', '\\`')}\``);
+  }
+  console.log('\n### Policy gate');
+  if (assessment.readyToMerge) console.log('\n- Ready for a policy-bounded merge.');
+  else for (const blocker of assessment.blockers) console.log(`\n- [ ] ${blocker}`);
+  console.log(`\n<!-- shiploop-readiness:v1 head=${snapshot.headSha} -->`);
+}
+
+export async function prMergeCommand(
+  cwd: string,
+  selector: string | undefined,
+  options: { confirm: string; allowRisk?: PolicyRiskLevel },
+): Promise<void> {
+  const { snapshot, assessment } = await snapshotAndAssessment(cwd, selector, options.allowRisk);
+  if (options.confirm !== String(snapshot.number)) {
+    throw new Error(`Confirmation must exactly match PR number ${snapshot.number}.`);
+  }
+  if (!assessment.readyToMerge) {
+    throw new Error(`Refusing to merge:\n${assessment.blockers.map((item) => `  - ${item}`).join('\n')}`);
+  }
+  const current = await snapshotAndAssessment(cwd, snapshot.url, options.allowRisk);
+  if (current.snapshot.headSha !== snapshot.headSha || current.snapshot.baseSha !== snapshot.baseSha) {
+    throw new Error('The PR head or base changed during merge assessment. Inspect and confirm again.');
+  }
+  if (!current.assessment.readyToMerge) {
+    throw new Error(`Refusing to merge after revalidation:\n${current.assessment.blockers.map((item) => `  - ${item}`).join('\n')}`);
+  }
+  const method = githubPolicy(current.config).mergeMethod;
+  const result = await runArgs('gh', [
+    'pr', 'merge', current.snapshot.url, `--${method}`, '--match-head-commit', current.snapshot.headSha,
+  ], cwd, { inherit: true });
+  if (result.code !== 0) {
+    process.exitCode = result.code;
+    return;
+  }
+  ui.ok(`Merged PR #${snapshot.number} with ${method}.`);
+}

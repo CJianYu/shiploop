@@ -12,7 +12,7 @@ development—short contexts, parallel lanes, local CI, logical commits, and a r
 branch—without assuming that every repository should work directly on `main`.
 
 ```text
-task brief → agent lane → local proof → risk review → explicit commit → closeout
+task brief → agent lane → local proof → explicit commit → head-bound evidence → guarded PR merge
 ```
 
 ## Why Shiploop
@@ -30,6 +30,11 @@ bottleneck. Shiploop turns repository policy into executable commands:
 - `shiploop review` elevates migrations, auth, billing, permissions, CI, and other risky changes.
 - `shiploop commit` refuses `.` and globs, requires explicit files, and prevents staged spillover.
 - `shiploop closeout` checks cleanliness, proof freshness, branch policy, and upstream sync.
+- `shiploop evidence` records review and real-behavior proof against an exact commit SHA.
+- `shiploop pr inspect` combines required GitHub checks, changed-file risk, reviews, and local evidence.
+- `shiploop pr checks --logs` surfaces failing required Actions logs without hiding red checks.
+- `shiploop pr merge` merges only after policy gates and exact-number confirmation.
+- Guarded merges require strict up-to-date checks and branch protection enforced for administrators.
 
 No model is hard-coded. Use Shiploop with Codex, Claude Code, Cursor, a shell script, or a human.
 
@@ -51,6 +56,10 @@ shiploop context --task "Preserve session expiry"
 shiploop proof
 shiploop review --diff
 shiploop commit -m "fix(auth): preserve session expiry" -- src/auth/session.ts test/session.test.ts
+shiploop evidence run --kind review --base origin/main --summary "Source-aware review completed" --command "codex review --base origin/main"
+shiploop evidence add --kind real --base origin/main --summary "Session expiry reproduced and fixed" --url "https://example.com/artifact"
+shiploop pr inspect
+shiploop pr brief
 shiploop lane finish "Preserve session expiry"
 shiploop closeout
 ```
@@ -106,6 +115,7 @@ proof:
         - "test/**"
 risk:
   high:
+    - ".shiploop/config.yml"
     - "**/migrations/**"
     - "**/auth/**"
     - ".github/workflows/**"
@@ -115,6 +125,12 @@ risk:
 commit:
   conventional: true
   maxSubjectLength: 72
+github:
+  requiredEvidence:
+    - review
+  maxMergeRisk: low
+  requireApproval: false
+  mergeMethod: squash
 ```
 
 Proof commands are normal shell commands owned by the repository. A required failure is never
@@ -141,7 +157,8 @@ coordinated exceptions, not as a default escape hatch.
 
 See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for design trade-offs and
 [docs/ADOPTION.md](docs/ADOPTION.md) for gradual rollout. Maintainers should follow
-[docs/RELEASING.md](docs/RELEASING.md) for tokenless automated publication.
+[docs/RELEASING.md](docs/RELEASING.md) for tokenless automated publication. The GitHub PR
+control plane is documented in [docs/GITHUB_CONTROL_PLANE.md](docs/GITHUB_CONTROL_PLANE.md).
 
 ## Non-goals
 

@@ -20,6 +20,7 @@ proof:
       quick: false
 risk:
   high:
+    - .shiploop/config.yml
     - "**/migrations/**"
     - "**/auth/**"
     - "**/billing/**"
@@ -41,3 +42,9 @@ risk:
 commit:
   conventional: true
   maxSubjectLength: 72
+github:
+  requiredEvidence:
+    - review
+  maxMergeRisk: low
+  requireApproval: false
+  mergeMethod: squash
