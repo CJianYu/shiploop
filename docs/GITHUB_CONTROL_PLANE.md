@@ -81,6 +81,10 @@ that the merging actor lacks ruleset bypass access and therefore fail closed. Me
 are also rejected because an
 asynchronously queued merge cannot preserve Shiploop's exact-base evidence guarantee.
 
+When `requireApproval` is enabled, classic protection must require at least one approval, dismiss
+stale approvals after pushes, and expose no user, team, or app bypass allowance. This binds approval
+to the current PR head and leaves GitHub responsible for enforcing it during the merge request.
+
 Risk overrides are visible and bounded:
 
 ```bash

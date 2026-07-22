@@ -33,6 +33,7 @@ export interface PullRequestSnapshot {
   changedFileCount: number;
   requiresStrictStatusChecks: boolean;
   protectionEnforcedForAdmins: boolean;
+  currentHeadApprovalRequired: boolean;
   requiresMergeQueue: boolean;
   hasRulesetRequirements: boolean;
   branchRulesKnown: boolean;
@@ -141,6 +142,7 @@ export function parsePullRequest(value: unknown): PullRequestSnapshot {
     changedFileCount: typeof raw.changedFiles === 'number' ? raw.changedFiles : files.length,
     requiresStrictStatusChecks: raw.requiresStrictStatusChecks === true,
     protectionEnforcedForAdmins: raw.protectionEnforcedForAdmins === true,
+    currentHeadApprovalRequired: raw.currentHeadApprovalRequired === true,
     requiresMergeQueue: raw.requiresMergeQueue === true,
     hasRulesetRequirements: raw.hasRulesetRequirements === true,
     branchRulesKnown: raw.branchRulesKnown === true,
@@ -188,6 +190,13 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
       const protection = object(JSON.parse(protectionResult.stdout));
       snapshot.requiresStrictStatusChecks = object(protection.required_status_checks).strict === true;
       snapshot.protectionEnforcedForAdmins = object(protection.enforce_admins).enabled === true;
+      const reviews = object(protection.required_pull_request_reviews);
+      const bypass = object(reviews.bypass_pull_request_allowances);
+      const bypassActors = ['users', 'teams', 'apps'].flatMap((key) => Array.isArray(bypass[key]) ? bypass[key] as unknown[] : []);
+      snapshot.currentHeadApprovalRequired = reviews.dismiss_stale_reviews === true
+        && typeof reviews.required_approving_review_count === 'number'
+        && reviews.required_approving_review_count >= 1
+        && bypassActors.length === 0;
     }
     const rulesResult = await runArgs('gh', [
       'api', `repos/${repository}/rules/branches/${encodeURIComponent(snapshot.baseRefName)}`,
@@ -287,6 +296,9 @@ export async function assessPullRequest(
     blockers.push(`GitHub merge state is ${snapshot.mergeStateStatus || 'unknown'}, not clean.`);
   }
   if (snapshot.reviewDecision === 'CHANGES_REQUESTED') blockers.push('A reviewer requested changes.');
+  if (policy.requireApproval && !snapshot.currentHeadApprovalRequired) {
+    blockers.push('Policy approval is not remotely enforced for the current head.');
+  }
   if (policy.requireApproval && snapshot.reviewDecision !== 'APPROVED') blockers.push('Policy requires an approving review.');
   if (checks.failing.length) blockers.push(`${checks.failing.length} check(s) are failing.`);
   if (checks.pending.length) blockers.push(`${checks.pending.length} check(s) are still pending.`);

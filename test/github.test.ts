@@ -36,6 +36,7 @@ function rawPullRequest(head: string): Record<string, unknown> {
     changedFiles: 1,
     requiresStrictStatusChecks: true,
     protectionEnforcedForAdmins: true,
+    currentHeadApprovalRequired: true,
     requiresMergeQueue: false,
     hasRulesetRequirements: false,
     branchRulesKnown: true,
@@ -196,6 +197,16 @@ describe('GitHub PR control plane', () => {
     raw.protectionEnforcedForAdmins = false;
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
     expect(value.blockers).toContain('Base branch protection is not enforced for administrators.');
+    expect(value.readyToMerge).toBe(false);
+  });
+
+  it('requires current-head remote approval protection for regulated policy', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.currentHeadApprovalRequired = false;
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('regulated'));
+    expect(value.blockers).toContain('Policy approval is not remotely enforced for the current head.');
     expect(value.readyToMerge).toBe(false);
   });
 
