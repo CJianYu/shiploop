@@ -18,6 +18,10 @@ async function repository(): Promise<{ root: string; head: string }> {
   return { root, head };
 }
 
+function differentSha(sha: string): string {
+  return `${sha.slice(0, -1)}${sha.endsWith('0') ? '1' : '0'}`;
+}
+
 function rawPullRequest(head: string): Record<string, unknown> {
   return {
     number: 42,
@@ -29,7 +33,7 @@ function rawPullRequest(head: string): Record<string, unknown> {
     headRefName: 'agent/session-fix',
     headRefOid: head,
     baseRefName: 'main',
-    baseRefOid: `${head.slice(0, -1)}0`,
+    baseRefOid: differentSha(head),
     mergeStateStatus: 'CLEAN',
     reviewDecision: 'APPROVED',
     files: [{ path: 'src/auth/session.ts' }],
@@ -120,7 +124,7 @@ describe('GitHub PR control plane', () => {
     snapshot.baseSha = head;
     await addEvidence(root, { kind: 'review', summary: 'Review complete', base: 'HEAD' });
     expect((await assessPullRequest(root, snapshot, baseConfig('team-pr'))).missingEvidence).toEqual([]);
-    snapshot.baseSha = `${head.slice(0, -1)}0`;
+    snapshot.baseSha = differentSha(head);
     const stale = await assessPullRequest(root, snapshot, baseConfig('team-pr'));
     expect(stale.missingEvidence).toEqual(['review']);
     expect(stale.evidence).toEqual([]);
