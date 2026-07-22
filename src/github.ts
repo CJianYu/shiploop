@@ -1,4 +1,4 @@
-import { githubPolicy } from './config.js';
+import { githubPolicy, parseConfigText } from './config.js';
 import { listEvidence } from './evidence.js';
 import { runArgs } from './lib/process.js';
 import { classifyFiles, type RiskLevel } from './risk.js';
@@ -11,6 +11,8 @@ export interface PullRequestCheck {
   state: CheckState;
   url?: string;
   completedAt?: string;
+  startedAt?: string;
+  workflow?: string;
 }
 
 export interface PullRequestSnapshot {
@@ -23,9 +25,12 @@ export interface PullRequestSnapshot {
   headRefName: string;
   headSha: string;
   baseRefName: string;
+  baseSha: string;
   mergeStateStatus: string;
   reviewDecision: string;
   files: string[];
+  listedFileCount: number;
+  changedFileCount: number;
   checks: PullRequestCheck[];
 }
 
@@ -58,29 +63,42 @@ function checkState(raw: UnknownRecord): CheckState {
   const conclusion = text(raw.conclusion || raw.state).toUpperCase();
   if (status && status !== 'COMPLETED') return 'pending';
   if (['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(conclusion)) return 'passing';
-  if (['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STALE'].includes(conclusion)) return 'failing';
+  if (['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STALE', 'STARTUP_FAILURE'].includes(conclusion)) return 'failing';
   if (['PENDING', 'EXPECTED', 'QUEUED', 'IN_PROGRESS'].includes(conclusion)) return 'pending';
   return 'pending';
 }
 
 export function normalizeChecks(value: unknown): PullRequestCheck[] {
   if (!Array.isArray(value)) return [];
-  const checks = value.map((item): PullRequestCheck => {
+  const checks = value.map((item, index): { identity: string; check: PullRequestCheck } => {
     const raw = object(item);
     const name = text(raw.name || raw.context) || 'unnamed check';
+    const workflow = text(raw.workflowName || raw.workflow);
     const url = text(raw.detailsUrl || raw.targetUrl);
     const completedAt = text(raw.completedAt);
-    return {
+    const startedAt = text(raw.startedAt || raw.createdAt);
+    const check: PullRequestCheck = {
       name,
       state: checkState(raw),
       ...(url ? { url } : {}),
       ...(completedAt ? { completedAt } : {}),
+      ...(startedAt ? { startedAt } : {}),
+      ...(workflow ? { workflow } : {}),
     };
+    const identity = raw.context
+      ? `context:${text(raw.context)}`
+      : workflow ? `workflow:${workflow}:${name}` : `unknown:${index}:${name}`;
+    return { identity, check };
   });
   const latest = new Map<string, PullRequestCheck>();
-  for (const check of checks) {
-    const current = latest.get(check.name);
-    if (!current || (check.completedAt ?? '') >= (current.completedAt ?? '')) latest.set(check.name, check);
+  for (const item of checks) {
+    const { check, identity } = item;
+    const current = latest.get(identity);
+    const checkTime = check.startedAt || check.completedAt || '';
+    const currentTime = current?.startedAt || current?.completedAt || '';
+    if (!current || checkTime > currentTime || (checkTime === currentTime && check.state === 'pending')) {
+      latest.set(identity, check);
+    }
   }
   return [...latest.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -104,9 +122,12 @@ export function parsePullRequest(value: unknown): PullRequestSnapshot {
     headRefName: text(raw.headRefName),
     headSha: text(raw.headRefOid),
     baseRefName: text(raw.baseRefName),
+    baseSha: text(raw.baseRefOid),
     mergeStateStatus: text(raw.mergeStateStatus),
     reviewDecision: text(raw.reviewDecision),
     files,
+    listedFileCount: files.length,
+    changedFileCount: typeof raw.changedFiles === 'number' ? raw.changedFiles : files.length,
     checks: normalizeChecks(raw.statusCheckRollup),
   };
 }
@@ -114,16 +135,51 @@ export function parsePullRequest(value: unknown): PullRequestSnapshot {
 export async function fetchPullRequest(root: string, selector?: string): Promise<PullRequestSnapshot> {
   const fields = [
     'number', 'url', 'title', 'state', 'isDraft', 'author', 'headRefName', 'headRefOid',
-    'baseRefName', 'mergeStateStatus', 'reviewDecision', 'files', 'statusCheckRollup',
+    'baseRefName', 'baseRefOid', 'mergeStateStatus', 'reviewDecision', 'changedFiles', 'files', 'statusCheckRollup',
   ].join(',');
   const args = ['pr', 'view', ...(selector ? [selector] : []), '--json', fields];
   const result = await runArgs('gh', args, root);
   if (result.code !== 0) throw new Error(result.stderr.trim() || 'Cannot read the GitHub pull request.');
   try {
-    return parsePullRequest(JSON.parse(result.stdout));
+    const snapshot = parsePullRequest(JSON.parse(result.stdout));
+    const repository = repositoryFromPullRequestUrl(snapshot.url);
+    if (!repository) throw new Error('Only GitHub pull request URLs are currently supported.');
+    const filesResult = await runArgs('gh', [
+      'api', `repos/${repository}/pulls/${snapshot.number}/files`, '--paginate', '--slurp',
+    ], root);
+    if (filesResult.code !== 0) throw new Error(filesResult.stderr.trim() || 'Cannot read all changed pull request files.');
+    const parsedFiles = parsePullRequestFiles(JSON.parse(filesResult.stdout));
+    snapshot.files = parsedFiles.paths;
+    snapshot.listedFileCount = parsedFiles.fileCount;
+    return snapshot;
   } catch (error) {
     throw new Error(`Cannot parse the GitHub pull request: ${(error as Error).message}`);
   }
+}
+
+export function repositoryFromPullRequestUrl(url: string): string | undefined {
+  return url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+/)?.[1];
+}
+
+export function parsePullRequestFiles(value: unknown): { paths: string[]; fileCount: number } {
+  const pages = Array.isArray(value) ? value : [];
+  const files = pages.flatMap((page) => Array.isArray(page) ? page : [page]).map(object);
+  const paths = files.flatMap((file) => [text(file.filename), text(file.previous_filename)]).filter(Boolean);
+  return { paths: [...new Set(paths)], fileCount: files.length };
+}
+
+export async function fetchBaseConfig(root: string, snapshot: PullRequestSnapshot): Promise<ShiploopConfig> {
+  const repository = repositoryFromPullRequestUrl(snapshot.url);
+  if (!repository || !snapshot.baseSha) throw new Error('Cannot resolve the pull request base policy.');
+  const result = await runArgs('gh', [
+    'api', `repos/${repository}/contents/.shiploop/config.yml`, '--method', 'GET', '-f', `ref=${snapshot.baseSha}`,
+  ], root);
+  if (result.code !== 0) throw new Error(result.stderr.trim() || 'Cannot read Shiploop policy from the pull request base.');
+  const payload = object(JSON.parse(result.stdout));
+  if (payload.encoding !== 'base64' || typeof payload.content !== 'string') {
+    throw new Error('GitHub returned an unsupported Shiploop policy payload.');
+  }
+  return parseConfigText(Buffer.from(payload.content.replace(/\s/g, ''), 'base64').toString('utf8'));
 }
 
 function highestRisk(files: ReturnType<typeof classifyFiles>): RiskLevel {
@@ -144,7 +200,7 @@ export async function assessPullRequest(
 ): Promise<PullRequestAssessment> {
   const policy = githubPolicy(config);
   const classifiedFiles = classifyFiles(snapshot.files, config);
-  const risk = highestRisk(classifiedFiles);
+  const risk = snapshot.files.includes('.shiploop/config.yml') ? 'high' : highestRisk(classifiedFiles);
   const evidence = await listEvidence(root, { head: snapshot.headSha });
   const kinds = new Set(evidence.map((record) => record.kind));
   const missingEvidence = policy.requiredEvidence.filter((kind) => !kinds.has(kind));
@@ -160,6 +216,10 @@ export async function assessPullRequest(
   if (snapshot.reviewDecision === 'CHANGES_REQUESTED') blockers.push('A reviewer requested changes.');
   if (policy.requireApproval && snapshot.reviewDecision !== 'APPROVED') blockers.push('Policy requires an approving review.');
   if (checks.failing.length) blockers.push(`${checks.failing.length} check(s) are failing.`);
+  if (checks.pending.length) blockers.push(`${checks.pending.length} check(s) are still pending.`);
+  if (snapshot.listedFileCount < snapshot.changedFileCount) {
+    blockers.push(`GitHub returned ${snapshot.listedFileCount} of ${snapshot.changedFileCount} changed files; risk cannot be assessed safely.`);
+  }
   if (missingEvidence.length) blockers.push(`Missing required evidence: ${missingEvidence.join(', ')}.`);
   const allowedRisk = options.allowRisk ?? policy.maxAutomergeRisk;
   if (riskRank(risk) > riskRank(allowedRisk)) blockers.push(`Risk is ${risk}; policy allows ${allowedRisk}.`);

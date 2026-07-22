@@ -44,4 +44,24 @@ describe('head-bound evidence', () => {
     })).rejects.toThrow('nothing was recorded');
     expect(await listEvidence(root)).toHaveLength(1);
   });
+
+  it('refuses evidence from an uncommitted repository state', async () => {
+    const root = await repository();
+    await writeFile(join(root, 'README.md'), '# uncommitted fix\n');
+    await expect(runEvidence(root, {
+      kind: 'review',
+      summary: 'Would run against dirty code',
+      command: 'node -e "process.exit(0)"',
+    })).rejects.toThrow('clean worktree and index');
+    expect(await listEvidence(root)).toHaveLength(0);
+  });
+
+  it('serializes concurrent evidence writes without losing records', async () => {
+    const root = await repository();
+    await Promise.all([
+      addEvidence(root, { kind: 'review', summary: 'Review clean' }),
+      addEvidence(root, { kind: 'real', summary: 'Real behavior clean' }),
+    ]);
+    expect(await listEvidence(root)).toHaveLength(2);
+  });
 });

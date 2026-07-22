@@ -1,5 +1,5 @@
-import { githubPolicy, loadConfig } from '../config.js';
-import { assessPullRequest, fetchPullRequest, type PullRequestAssessment, type PullRequestSnapshot } from '../github.js';
+import { githubPolicy } from '../config.js';
+import { assessPullRequest, fetchBaseConfig, fetchPullRequest, repositoryFromPullRequestUrl, type PullRequestAssessment, type PullRequestSnapshot } from '../github.js';
 import { runArgs } from '../lib/process.js';
 import type { PolicyRiskLevel } from '../types.js';
 import { ui } from '../ui.js';
@@ -24,19 +24,15 @@ function printSummary(snapshot: PullRequestSnapshot, assessment: PullRequestAsse
   }
 }
 
-function repositoryFromUrl(url: string): string | undefined {
-  return url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+/)?.[1];
-}
-
 async function snapshotAndAssessment(
   cwd: string,
   selector: string | undefined,
   allowRisk?: PolicyRiskLevel,
-): Promise<{ snapshot: PullRequestSnapshot; assessment: PullRequestAssessment }> {
+): Promise<{ snapshot: PullRequestSnapshot; assessment: PullRequestAssessment; config: Awaited<ReturnType<typeof fetchBaseConfig>> }> {
   const snapshot = await fetchPullRequest(cwd, selector);
-  const config = await loadConfig(cwd);
+  const config = await fetchBaseConfig(cwd, snapshot);
   const assessment = await assessPullRequest(cwd, snapshot, config, { ...(allowRisk ? { allowRisk } : {}) });
-  return { snapshot, assessment };
+  return { snapshot, assessment, config };
 }
 
 export async function prInspectCommand(
@@ -57,6 +53,8 @@ export async function prChecksCommand(
   const { snapshot, assessment } = await snapshotAndAssessment(cwd, selector);
   if (options.json) {
     console.log(JSON.stringify({ number: snapshot.number, checks: assessment.checks }, null, 2));
+    if (assessment.checks.failing.length) process.exitCode = 1;
+    else if (assessment.checks.pending.length) process.exitCode = 8;
     return;
   }
   ui.heading(`Checks for PR #${snapshot.number}`);
@@ -72,7 +70,7 @@ export async function prChecksCommand(
     if (!runIds.length) ui.warn('Failing checks do not expose GitHub Actions run URLs.');
     for (const id of runIds) {
       ui.info(`Failed logs from run ${id}`);
-      const repository = repositoryFromUrl(snapshot.url);
+      const repository = repositoryFromPullRequestUrl(snapshot.url);
       const result = await runArgs('gh', [
         'run', 'view', id, '--log-failed', ...(repository ? ['--repo', repository] : []),
       ], cwd, { inherit: true });
@@ -80,6 +78,7 @@ export async function prChecksCommand(
     }
   }
   if (assessment.checks.failing.length) process.exitCode = 1;
+  else if (assessment.checks.pending.length) process.exitCode = 8;
 }
 
 export async function prBriefCommand(cwd: string, selector?: string): Promise<void> {
@@ -106,20 +105,20 @@ export async function prMergeCommand(
   selector: string | undefined,
   options: { confirm: string; allowRisk?: PolicyRiskLevel },
 ): Promise<void> {
-  const { snapshot, assessment } = await snapshotAndAssessment(cwd, selector, options.allowRisk);
+  const { snapshot, assessment, config } = await snapshotAndAssessment(cwd, selector, options.allowRisk);
   if (options.confirm !== String(snapshot.number)) {
     throw new Error(`Confirmation must exactly match PR number ${snapshot.number}.`);
   }
   if (!assessment.readyToArm) {
     throw new Error(`Refusing to arm auto-merge:\n${assessment.blockers.map((item) => `  - ${item}`).join('\n')}`);
   }
-  const config = await loadConfig(cwd);
   const method = githubPolicy(config).mergeMethod;
-  const result = await runArgs('gh', ['pr', 'merge', snapshot.url, '--auto', `--${method}`], cwd, { inherit: true });
+  const result = await runArgs('gh', [
+    'pr', 'merge', snapshot.url, '--auto', `--${method}`, '--match-head-commit', snapshot.headSha,
+  ], cwd, { inherit: true });
   if (result.code !== 0) {
     process.exitCode = result.code;
     return;
   }
   ui.ok(`Armed PR #${snapshot.number} for ${method} auto-merge.`);
-  if (assessment.checks.pending.length) ui.info(`${assessment.checks.pending.length} pending check(s) still gate the merge.`);
 }

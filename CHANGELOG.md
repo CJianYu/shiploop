@@ -11,6 +11,8 @@ Keep a Changelog categories.
 - GitHub PR inspection combining check state, changed-file risk, reviews, and local evidence.
 - Failed Actions log retrieval and Markdown readiness blocks for PR descriptions.
 - Policy-bounded auto-merge with explicit PR-number confirmation and configurable risk ceilings.
+- Fail-closed handling for dirty evidence states, concurrent evidence writes, truncated PR files,
+  and PR heads that change while auto-merge is being armed.
 
 ### Changed
 

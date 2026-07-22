@@ -114,6 +114,7 @@ proof:
         - "test/**"
 risk:
   high:
+    - ".shiploop/config.yml"
     - "**/migrations/**"
     - "**/auth/**"
     - ".github/workflows/**"

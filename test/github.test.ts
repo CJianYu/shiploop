@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { baseConfig } from '../src/config.js';
 import { addEvidence } from '../src/evidence.js';
-import { assessPullRequest, parsePullRequest } from '../src/github.js';
+import { assessPullRequest, parsePullRequest, parsePullRequestFiles } from '../src/github.js';
 import { run } from '../src/lib/process.js';
 
 async function repository(): Promise<{ root: string; head: string }> {
@@ -29,12 +29,14 @@ function rawPullRequest(head: string): Record<string, unknown> {
     headRefName: 'agent/session-fix',
     headRefOid: head,
     baseRefName: 'main',
+    baseRefOid: `${head.slice(0, -1)}0`,
     mergeStateStatus: 'CLEAN',
     reviewDecision: 'APPROVED',
     files: [{ path: 'src/auth/session.ts' }],
+    changedFiles: 1,
     statusCheckRollup: [
-      { name: 'test', status: 'COMPLETED', conclusion: 'FAILURE', completedAt: '2026-01-01T00:00:00Z' },
-      { name: 'test', status: 'COMPLETED', conclusion: 'SUCCESS', completedAt: '2026-01-01T00:01:00Z' },
+      { name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'FAILURE', completedAt: '2026-01-01T00:00:00Z' },
+      { name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'SUCCESS', completedAt: '2026-01-01T00:01:00Z' },
     ],
   };
 }
@@ -43,7 +45,7 @@ describe('GitHub PR control plane', () => {
   it('normalizes the latest check attempt and enforces risk plus evidence policy', async () => {
     const { root, head } = await repository();
     const snapshot = parsePullRequest(rawPullRequest(head));
-    expect(snapshot.checks).toEqual([{ name: 'test', state: 'passing', completedAt: '2026-01-01T00:01:00Z' }]);
+    expect(snapshot.checks).toEqual([{ name: 'test', state: 'passing', completedAt: '2026-01-01T00:01:00Z', workflow: 'CI' }]);
 
     const config = baseConfig('team-pr');
     const blocked = await assessPullRequest(root, snapshot, config);
@@ -55,6 +57,58 @@ describe('GitHub PR control plane', () => {
     const ready = await assessPullRequest(root, snapshot, config, { allowRisk: 'high' });
     expect(ready.readyToArm).toBe(true);
     expect(ready.evidence).toHaveLength(1);
+  });
+
+  it('prefers an active rerun over an older successful check', async () => {
+    const { head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.statusCheckRollup = [
+      { name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'SUCCESS', startedAt: '2026-01-01T00:00:00Z', completedAt: '2026-01-01T00:01:00Z' },
+      { name: 'test', workflowName: 'CI', status: 'IN_PROGRESS', startedAt: '2026-01-01T00:02:00Z' },
+    ];
+    expect(parsePullRequest(raw).checks).toEqual([
+      { name: 'test', state: 'pending', startedAt: '2026-01-01T00:02:00Z', workflow: 'CI' },
+    ]);
+  });
+
+  it('preserves same-named checks from different workflows and blocks pending checks', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.statusCheckRollup = [
+      { name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'SUCCESS' },
+      { name: 'test', workflowName: 'Security', status: 'IN_PROGRESS', startedAt: '2026-01-01T00:02:00Z' },
+    ];
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.checks.passing).toHaveLength(1);
+    expect(value.checks.pending).toHaveLength(1);
+    expect(value.blockers).toContain('1 check(s) are still pending.');
+  });
+
+  it('classifies startup failures as failing', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.statusCheckRollup = [{ name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'STARTUP_FAILURE' }];
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.checks.failing).toHaveLength(1);
+    expect(value.readyToArm).toBe(false);
+  });
+
+  it('includes both sides of a rename in risk input', () => {
+    expect(parsePullRequestFiles([[{
+      filename: 'src/session.ts',
+      previous_filename: 'src/auth/session.ts',
+    }]])).toEqual({ paths: ['src/session.ts', 'src/auth/session.ts'], fileCount: 1 });
+  });
+
+  it('always treats the merge-policy file as high risk', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: '.shiploop/config.yml' }];
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.risk).toBe('high');
+    expect(value.readyToArm).toBe(false);
   });
 
   it('blocks drafts, requested changes, conflicts, and current failing checks', async () => {
@@ -73,5 +127,15 @@ describe('GitHub PR control plane', () => {
       'A reviewer requested changes.',
       '1 check(s) are failing.',
     ]));
+  });
+
+  it('fails closed when GitHub truncates the changed-file list', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = Array.from({ length: 100 }, (_, index) => ({ path: `src/file-${index}.ts` }));
+    raw.changedFiles = 101;
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.readyToArm).toBe(false);
+    expect(value.blockers).toContain('GitHub returned 100 of 101 changed files; risk cannot be assessed safely.');
   });
 });

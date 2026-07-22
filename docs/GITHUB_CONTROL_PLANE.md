@@ -29,7 +29,8 @@ shiploop evidence run \
   --command "codex review --base origin/main"
 ```
 
-The record is written only when the command exits successfully and the Git head remains stable.
+The record is written only when the worktree and index are clean, the command exits successfully,
+and the Git head remains stable. Concurrent writers are serialized in Git's common directory.
 Use `evidence add` for proof that lives outside the terminal, such as a browser recording, device
 test, deployment preview, or externally hosted security report. This is explicitly marked as an
 attestation rather than command-verified evidence.
@@ -52,6 +53,11 @@ Supported kinds are:
 - evidence matching the exact remote head;
 - every blocker that prevents arming auto-merge.
 
+GitHub CLI file results are checked against the PR's total changed-file count. Shiploop fails closed
+instead of applying a partial risk classification when GitHub returns a truncated list. Renames are
+classified using both the old and new paths. Merge policy is loaded from the exact GitHub base SHA,
+so neither an uncommitted local edit nor the PR itself can relax its own gate.
+
 `shiploop pr checks --logs` streams failed GitHub Actions logs when check URLs expose run IDs.
 `shiploop pr brief` renders a Markdown block suitable for a PR description or maintainer handoff.
 
@@ -59,8 +65,10 @@ Supported kinds are:
 
 `shiploop pr merge` only arms GitHub auto-merge. It requires `--confirm` to exactly equal the PR
 number. It does not press through failing checks, missing evidence, requested changes, conflicts, or
-the configured risk ceiling. Pending checks may remain because GitHub branch protection is still the
-final merge authority.
+the configured risk ceiling. The assessed head SHA is also sent to GitHub, closing the window where
+a newly pushed commit could otherwise inherit an earlier decision. Shiploop also waits for every
+visible check—not only branch-protection requirements—to finish successfully before it mutates merge
+state. GitHub branch protection remains the final merge authority.
 
 Risk overrides are visible and bounded:
 

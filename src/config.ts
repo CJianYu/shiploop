@@ -25,6 +25,7 @@ export function baseConfig(profile: Profile): ShiploopConfig {
     },
     risk: {
       high: [
+        '.shiploop/config.yml',
         '**/migrations/**',
         '**/auth/**',
         '**/billing/**',
@@ -65,12 +66,15 @@ export function githubPolicy(config: ShiploopConfig): NonNullable<ShiploopConfig
 
 export async function loadConfig(root: string): Promise<ShiploopConfig> {
   const path = join(root, CONFIG_PATH);
-  let value: unknown;
   try {
-    value = parse(await readFile(path, 'utf8'));
+    return parseConfigText(await readFile(path, 'utf8'));
   } catch (error) {
     throw new Error(`Cannot read ${CONFIG_PATH}: ${(error as Error).message}`);
   }
+}
+
+export function parseConfigText(contents: string): ShiploopConfig {
+  const value: unknown = parse(contents);
   assertConfig(value);
   return value;
 }
