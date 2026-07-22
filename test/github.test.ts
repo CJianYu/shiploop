@@ -180,8 +180,8 @@ describe('GitHub PR control plane', () => {
 
   it('recognizes strict rulesets and rejects merge queues', async () => {
     expect(parseBranchRules([
-      { type: 'required_status_checks', parameters: { strict_required_status_checks_policy: true } },
-      { type: 'merge_queue' },
+      [{ type: 'required_status_checks', parameters: { strict_required_status_checks_policy: true } }],
+      [{ type: 'merge_queue' }],
     ])).toEqual({ strictStatusChecks: true, mergeQueue: true });
 
     const { root, head } = await repository();
