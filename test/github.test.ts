@@ -198,11 +198,11 @@ describe('GitHub PR control plane', () => {
     expect(value.readyToMerge).toBe(false);
   });
 
-  it('recognizes strict rulesets and rejects merge queues', async () => {
+  it('recognizes merge queues across ruleset pages and rejects them', async () => {
     expect(parseBranchRules([
       [{ type: 'required_status_checks', parameters: { strict_required_status_checks_policy: true } }],
       [{ type: 'merge_queue' }],
-    ])).toEqual({ strictStatusChecks: true, mergeQueue: true });
+    ])).toEqual({ mergeQueue: true });
 
     const { root, head } = await repository();
     const raw = rawPullRequest(head);

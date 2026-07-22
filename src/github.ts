@@ -194,7 +194,6 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
     if (rulesResult.code === 0) {
       const rules = parseBranchRules(JSON.parse(rulesResult.stdout));
       snapshot.branchRulesKnown = true;
-      snapshot.requiresStrictStatusChecks ||= rules.strictStatusChecks;
       snapshot.requiresMergeQueue = rules.mergeQueue;
     }
     return snapshot;
@@ -203,12 +202,10 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
   }
 }
 
-export function parseBranchRules(value: unknown): { strictStatusChecks: boolean; mergeQueue: boolean } {
+export function parseBranchRules(value: unknown): { mergeQueue: boolean } {
   const pages = Array.isArray(value) ? value : [];
   const rules = pages.flatMap((page) => Array.isArray(page) ? page : [page]).map(object);
   return {
-    strictStatusChecks: rules.some((rule) => rule.type === 'required_status_checks'
-      && object(rule.parameters).strict_required_status_checks_policy === true),
     mergeQueue: rules.some((rule) => rule.type === 'merge_queue'),
   };
 }
