@@ -35,14 +35,13 @@ function rawPullRequest(head: string): Record<string, unknown> {
     files: [{ path: 'src/auth/session.ts' }],
     changedFiles: 1,
     statusCheckRollup: [
-      { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/1', status: 'COMPLETED', conclusion: 'FAILURE', completedAt: '2026-01-01T00:00:00Z' },
       { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/2', status: 'COMPLETED', conclusion: 'SUCCESS', completedAt: '2026-01-01T00:01:00Z' },
     ],
   };
 }
 
 describe('GitHub PR control plane', () => {
-  it('normalizes the latest check attempt and enforces risk plus evidence policy', async () => {
+  it('normalizes checks and enforces risk plus evidence policy', async () => {
     const { root, head } = await repository();
     const snapshot = parsePullRequest(rawPullRequest(head));
     expect(snapshot.checks).toEqual([{ name: 'test', state: 'passing', url: 'https://github.com/example/repo/actions/runs/100/job/2', completedAt: '2026-01-01T00:01:00Z', workflow: 'CI' }]);
@@ -60,7 +59,7 @@ describe('GitHub PR control plane', () => {
     expect(ready.evidence).toHaveLength(1);
   });
 
-  it('prefers an active rerun over an older successful check', async () => {
+  it('keeps separate Actions jobs visible even when their names match', async () => {
     const { head } = await repository();
     const raw = rawPullRequest(head);
     raw.statusCheckRollup = [
@@ -68,6 +67,7 @@ describe('GitHub PR control plane', () => {
       { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/2', status: 'IN_PROGRESS', startedAt: '2026-01-01T00:02:00Z' },
     ];
     expect(parsePullRequest(raw).checks).toEqual([
+      { name: 'test', state: 'passing', url: 'https://github.com/example/repo/actions/runs/100/job/1', completedAt: '2026-01-01T00:01:00Z', startedAt: '2026-01-01T00:00:00Z', workflow: 'CI' },
       { name: 'test', state: 'pending', url: 'https://github.com/example/repo/actions/runs/100/job/2', startedAt: '2026-01-01T00:02:00Z', workflow: 'CI' },
     ]);
   });
@@ -95,7 +95,9 @@ describe('GitHub PR control plane', () => {
     await addEvidence(root, { kind: 'review', summary: 'Review complete', base: 'HEAD' });
     expect((await assessPullRequest(root, snapshot, baseConfig('team-pr'))).missingEvidence).toEqual([]);
     snapshot.baseSha = `${head.slice(0, -1)}0`;
-    expect((await assessPullRequest(root, snapshot, baseConfig('team-pr'))).missingEvidence).toEqual(['review']);
+    const stale = await assessPullRequest(root, snapshot, baseConfig('team-pr'));
+    expect(stale.missingEvidence).toEqual(['review']);
+    expect(stale.evidence).toEqual([]);
   });
 
   it('classifies startup failures as failing', async () => {

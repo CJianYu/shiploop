@@ -85,10 +85,10 @@ export function normalizeChecks(value: unknown): PullRequestCheck[] {
       ...(startedAt ? { startedAt } : {}),
       ...(workflow ? { workflow } : {}),
     };
-    const actionsRunId = url.match(/\/actions\/runs\/(\d+)(?:\/|$)/)?.[1];
+    const actionsJob = url.match(/\/actions\/runs\/(\d+)\/job\/(\d+)(?:\/|$)/);
     const identity = raw.context
       ? `context:${text(raw.context)}`
-      : actionsRunId ? `actions:${actionsRunId}:${name}` : `unknown:${index}:${name}`;
+      : actionsJob ? `actions:${actionsJob[1]}:job:${actionsJob[2]}` : `unknown:${index}:${name}`;
     return { identity, check };
   });
   const latest = new Map<string, PullRequestCheck>();
@@ -228,7 +228,7 @@ export async function assessPullRequest(
   return {
     risk,
     classifiedFiles,
-    evidence,
+    evidence: baseBoundEvidence,
     missingEvidence,
     checks,
     blockers,
