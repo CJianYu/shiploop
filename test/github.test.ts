@@ -38,6 +38,7 @@ function rawPullRequest(head: string): Record<string, unknown> {
     protectionEnforcedForAdmins: true,
     requiresMergeQueue: false,
     branchRulesKnown: true,
+    checksKnown: true,
     statusCheckRollup: [
       { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/2', status: 'COMPLETED', conclusion: 'SUCCESS', completedAt: '2026-01-01T00:01:00Z' },
     ],
@@ -73,6 +74,25 @@ describe('GitHub PR control plane', () => {
     expect(parsePullRequest(raw).checks).toEqual([
       { name: 'test', state: 'passing', url: 'https://github.com/example/repo/actions/runs/100/job/1', completedAt: '2026-01-01T00:01:00Z', startedAt: '2026-01-01T00:00:00Z', workflow: 'CI' },
       { name: 'test', state: 'pending', url: 'https://github.com/example/repo/actions/runs/100/job/2', startedAt: '2026-01-01T00:02:00Z', workflow: 'CI' },
+    ]);
+  });
+
+  it('normalizes the buckets returned by the paginated gh checks command', async () => {
+    const { head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.statusCheckRollup = [
+      { name: 'pass', bucket: 'pass', link: 'https://example.com/pass' },
+      { name: 'skip', bucket: 'skipping' },
+      { name: 'wait', bucket: 'pending' },
+      { name: 'fail', bucket: 'fail' },
+      { name: 'cancel', bucket: 'cancel' },
+    ];
+    expect(parsePullRequest(raw).checks.map(({ name, state }) => ({ name, state }))).toEqual([
+      { name: 'cancel', state: 'failing' },
+      { name: 'fail', state: 'failing' },
+      { name: 'pass', state: 'passing' },
+      { name: 'skip', state: 'passing' },
+      { name: 'wait', state: 'pending' },
     ]);
   });
 
@@ -201,5 +221,15 @@ describe('GitHub PR control plane', () => {
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
     expect(value.readyToMerge).toBe(false);
     expect(value.blockers).toContain('GitHub returned 100 of 101 changed files; risk cannot be assessed safely.');
+  });
+
+  it('fails closed when the complete check rollup cannot be verified', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.checksKnown = false;
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.readyToMerge).toBe(false);
+    expect(value.blockers).toContain('The complete GitHub check rollup could not be verified.');
   });
 });

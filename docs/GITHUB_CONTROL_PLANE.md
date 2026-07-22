@@ -62,7 +62,9 @@ instead of applying a partial risk classification when GitHub returns a truncate
 classified using both the old and new paths. Merge policy is loaded from the exact GitHub base SHA,
 so neither an uncommitted local edit nor the PR itself can relax its own gate.
 
-`shiploop pr checks --logs` streams failed GitHub Actions logs when check URLs expose run IDs.
+Shiploop uses `gh pr checks` so check contexts beyond GitHub's first GraphQL page are included; if
+the complete rollup cannot be verified, merge assessment fails closed. `shiploop pr checks --logs`
+streams failed GitHub Actions logs when check URLs expose run IDs.
 `shiploop pr brief` renders a Markdown block suitable for a PR description or maintainer handoff.
 
 ## Merge safety

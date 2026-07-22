@@ -35,6 +35,7 @@ export interface PullRequestSnapshot {
   protectionEnforcedForAdmins: boolean;
   requiresMergeQueue: boolean;
   branchRulesKnown: boolean;
+  checksKnown: boolean;
   checks: PullRequestCheck[];
 }
 
@@ -63,6 +64,10 @@ function text(value: unknown): string {
 }
 
 function checkState(raw: UnknownRecord): CheckState {
+  const bucket = text(raw.bucket).toUpperCase();
+  if (['PASS', 'SKIPPING'].includes(bucket)) return 'passing';
+  if (['FAIL', 'CANCEL'].includes(bucket)) return 'failing';
+  if (bucket === 'PENDING') return 'pending';
   const status = text(raw.status).toUpperCase();
   const conclusion = text(raw.conclusion || raw.state).toUpperCase();
   if (status && status !== 'COMPLETED') return 'pending';
@@ -78,7 +83,7 @@ export function normalizeChecks(value: unknown): PullRequestCheck[] {
     const raw = object(item);
     const name = text(raw.name || raw.context) || 'unnamed check';
     const workflow = text(raw.workflowName || raw.workflow);
-    const url = text(raw.detailsUrl || raw.targetUrl);
+    const url = text(raw.detailsUrl || raw.targetUrl || raw.link);
     const completedAt = text(raw.completedAt);
     const startedAt = text(raw.startedAt || raw.createdAt);
     const check: PullRequestCheck = {
@@ -137,6 +142,7 @@ export function parsePullRequest(value: unknown): PullRequestSnapshot {
     protectionEnforcedForAdmins: raw.protectionEnforcedForAdmins === true,
     requiresMergeQueue: raw.requiresMergeQueue === true,
     branchRulesKnown: raw.branchRulesKnown === true,
+    checksKnown: raw.checksKnown === true,
     checks: normalizeChecks(raw.statusCheckRollup),
   };
 }
@@ -160,6 +166,19 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
     const parsedFiles = parsePullRequestFiles(JSON.parse(filesResult.stdout));
     snapshot.files = parsedFiles.paths;
     snapshot.listedFileCount = parsedFiles.fileCount;
+    const checksResult = await runArgs('gh', [
+      'pr', 'checks', snapshot.url,
+      '--json', 'name,state,bucket,link,startedAt,completedAt,workflow',
+    ], root);
+    try {
+      const checks = JSON.parse(checksResult.stdout) as unknown;
+      if (Array.isArray(checks)) {
+        snapshot.checks = normalizeChecks(checks);
+        snapshot.checksKnown = true;
+      }
+    } catch {
+      snapshot.checksKnown = false;
+    }
     const protectionResult = await runArgs('gh', [
       'api', `repos/${repository}/branches/${encodeURIComponent(snapshot.baseRefName)}/protection`,
     ], root);
@@ -257,6 +276,7 @@ export async function assessPullRequest(
     blockers.push('Base branch protection is not enforced for administrators.');
   }
   if (!snapshot.branchRulesKnown) blockers.push('GitHub branch rules could not be verified.');
+  if (!snapshot.checksKnown) blockers.push('The complete GitHub check rollup could not be verified.');
   if (snapshot.requiresMergeQueue) blockers.push('Base branch requires a merge queue, which exact-diff merge does not support.');
   if (snapshot.mergeStateStatus === 'DIRTY') blockers.push('PR has merge conflicts.');
   else if (snapshot.mergeStateStatus !== 'CLEAN') {
