@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { changedFiles, gitCommonDir, headSha } from './lib/git.js';
+import { changedFiles, gitCommonDir, headSha, resolveCommit } from './lib/git.js';
 import { withGitLock } from './lib/lock.js';
 import { run } from './lib/process.js';
 import type { EvidenceKind, EvidenceRecord } from './types.js';
@@ -71,10 +71,11 @@ function validateInput(kind: EvidenceKind, summary: string, url?: string): void 
 
 export async function addEvidence(
   root: string,
-  input: { kind: EvidenceKind; summary: string; command?: string; url?: string },
+  input: { kind: EvidenceKind; summary: string; command?: string; url?: string; base?: string },
 ): Promise<EvidenceRecord> {
   validateInput(input.kind, input.summary, input.url);
   const currentHead = await requireCleanHead(root);
+  const baseSha = input.base ? await resolveCommit(root, input.base) : undefined;
   const record: EvidenceRecord = {
     version: 1,
     id: randomUUID(),
@@ -82,6 +83,7 @@ export async function addEvidence(
     summary: input.summary.trim(),
     source: 'attestation',
     headSha: currentHead,
+    ...(baseSha ? { baseSha } : {}),
     createdAt: new Date().toISOString(),
     ...(input.command ? { command: input.command } : {}),
     ...(input.url ? { url: input.url } : {}),
@@ -92,11 +94,12 @@ export async function addEvidence(
 
 export async function runEvidence(
   root: string,
-  input: { kind: EvidenceKind; summary: string; command: string; url?: string },
+  input: { kind: EvidenceKind; summary: string; command: string; url?: string; base?: string },
 ): Promise<EvidenceRecord> {
   validateInput(input.kind, input.summary, input.url);
   if (!input.command.trim()) throw new Error('Evidence command must not be empty.');
   const expectedHead = await requireCleanHead(root);
+  const baseSha = input.base ? await resolveCommit(root, input.base) : undefined;
   const result = await run(input.command, root, { inherit: true });
   if (result.code !== 0) throw new Error(`Evidence command failed with exit code ${result.code}; nothing was recorded.`);
   await requireCleanHead(root, expectedHead);
@@ -107,6 +110,7 @@ export async function runEvidence(
     summary: input.summary.trim(),
     source: 'command',
     headSha: expectedHead,
+    ...(baseSha ? { baseSha } : {}),
     createdAt: new Date().toISOString(),
     command: input.command,
     durationMs: result.durationMs,

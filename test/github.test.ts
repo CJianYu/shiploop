@@ -35,8 +35,8 @@ function rawPullRequest(head: string): Record<string, unknown> {
     files: [{ path: 'src/auth/session.ts' }],
     changedFiles: 1,
     statusCheckRollup: [
-      { name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'FAILURE', completedAt: '2026-01-01T00:00:00Z' },
-      { name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'SUCCESS', completedAt: '2026-01-01T00:01:00Z' },
+      { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/1', status: 'COMPLETED', conclusion: 'FAILURE', completedAt: '2026-01-01T00:00:00Z' },
+      { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/2', status: 'COMPLETED', conclusion: 'SUCCESS', completedAt: '2026-01-01T00:01:00Z' },
     ],
   };
 }
@@ -45,7 +45,7 @@ describe('GitHub PR control plane', () => {
   it('normalizes the latest check attempt and enforces risk plus evidence policy', async () => {
     const { root, head } = await repository();
     const snapshot = parsePullRequest(rawPullRequest(head));
-    expect(snapshot.checks).toEqual([{ name: 'test', state: 'passing', completedAt: '2026-01-01T00:01:00Z', workflow: 'CI' }]);
+    expect(snapshot.checks).toEqual([{ name: 'test', state: 'passing', url: 'https://github.com/example/repo/actions/runs/100/job/2', completedAt: '2026-01-01T00:01:00Z', workflow: 'CI' }]);
 
     const config = baseConfig('team-pr');
     const blocked = await assessPullRequest(root, snapshot, config);
@@ -53,7 +53,8 @@ describe('GitHub PR control plane', () => {
     expect(blocked.blockers).toContain('Missing required evidence: review.');
     expect(blocked.blockers).toContain('Risk is high; policy allows low.');
 
-    await addEvidence(root, { kind: 'review', summary: 'Review clean' });
+    await addEvidence(root, { kind: 'review', summary: 'Review clean', base: 'HEAD' });
+    snapshot.baseSha = head;
     const ready = await assessPullRequest(root, snapshot, config, { allowRisk: 'high' });
     expect(ready.readyToArm).toBe(true);
     expect(ready.evidence).toHaveLength(1);
@@ -63,11 +64,11 @@ describe('GitHub PR control plane', () => {
     const { head } = await repository();
     const raw = rawPullRequest(head);
     raw.statusCheckRollup = [
-      { name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'SUCCESS', startedAt: '2026-01-01T00:00:00Z', completedAt: '2026-01-01T00:01:00Z' },
-      { name: 'test', workflowName: 'CI', status: 'IN_PROGRESS', startedAt: '2026-01-01T00:02:00Z' },
+      { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/1', status: 'COMPLETED', conclusion: 'SUCCESS', startedAt: '2026-01-01T00:00:00Z', completedAt: '2026-01-01T00:01:00Z' },
+      { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/2', status: 'IN_PROGRESS', startedAt: '2026-01-01T00:02:00Z' },
     ];
     expect(parsePullRequest(raw).checks).toEqual([
-      { name: 'test', state: 'pending', startedAt: '2026-01-01T00:02:00Z', workflow: 'CI' },
+      { name: 'test', state: 'pending', url: 'https://github.com/example/repo/actions/runs/100/job/2', startedAt: '2026-01-01T00:02:00Z', workflow: 'CI' },
     ]);
   });
 
@@ -76,13 +77,25 @@ describe('GitHub PR control plane', () => {
     const raw = rawPullRequest(head);
     raw.files = [{ path: 'README.md' }];
     raw.statusCheckRollup = [
-      { name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'SUCCESS' },
-      { name: 'test', workflowName: 'Security', status: 'IN_PROGRESS', startedAt: '2026-01-01T00:02:00Z' },
+      { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/1', status: 'COMPLETED', conclusion: 'SUCCESS' },
+      { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/200/job/2', status: 'IN_PROGRESS', startedAt: '2026-01-01T00:02:00Z' },
     ];
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
     expect(value.checks.passing).toHaveLength(1);
     expect(value.checks.pending).toHaveLength(1);
     expect(value.blockers).toContain('1 check(s) are still pending.');
+  });
+
+  it('invalidates required evidence when the PR base advances', async () => {
+    const { root, head } = await repository();
+    const snapshot = parsePullRequest(rawPullRequest(head));
+    snapshot.files = ['README.md'];
+    snapshot.listedFileCount = 1;
+    snapshot.baseSha = head;
+    await addEvidence(root, { kind: 'review', summary: 'Review complete', base: 'HEAD' });
+    expect((await assessPullRequest(root, snapshot, baseConfig('team-pr'))).missingEvidence).toEqual([]);
+    snapshot.baseSha = `${head.slice(0, -1)}0`;
+    expect((await assessPullRequest(root, snapshot, baseConfig('team-pr'))).missingEvidence).toEqual(['review']);
   });
 
   it('classifies startup failures as failing', async () => {

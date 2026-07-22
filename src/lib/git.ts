@@ -49,6 +49,12 @@ export async function headSha(cwd: string): Promise<string> {
   return result.stdout.trim();
 }
 
+export async function resolveCommit(cwd: string, ref: string): Promise<string> {
+  const result = await runArgs('git', ['rev-parse', '--verify', `${ref}^{commit}`], cwd);
+  if (result.code !== 0) throw new Error(`Cannot resolve Git base ref: ${ref}`);
+  return result.stdout.trim();
+}
+
 export async function defaultBranch(cwd: string): Promise<string> {
   const remote = await runArgs('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], cwd);
   if (remote.code === 0) return remote.stdout.trim().replace(/^origin\//, '');

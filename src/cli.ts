@@ -107,14 +107,16 @@ evidence.command('add')
   .requiredOption('--summary <summary>', 'short description of what the evidence proves')
   .option('--command <command>', 'command that produced the external evidence')
   .option('--url <url>', 'artifact, run, screenshot, or report URL')
-  .action(async (options: { kind: EvidenceKind; summary: string; command?: string; url?: string }) => evidenceAddCommand(await root(), options));
+  .option('--base <ref>', 'base ref to bind when the evidence assesses a diff')
+  .action(async (options: { kind: EvidenceKind; summary: string; command?: string; url?: string; base?: string }) => evidenceAddCommand(await root(), options));
 evidence.command('run')
   .description('Run a command and record evidence only when it succeeds on a stable head')
   .addOption(new Option('--kind <kind>', 'evidence kind').choices(['proof', 'real', 'review', 'security']).makeOptionMandatory())
   .requiredOption('--summary <summary>', 'short description of what the command proves')
   .requiredOption('--command <command>', 'command to execute')
   .option('--url <url>', 'artifact or report URL associated with the command')
-  .action(async (options: { kind: EvidenceKind; summary: string; command: string; url?: string }) => evidenceRunCommand(await root(), options));
+  .option('--base <ref>', 'base ref to bind when the evidence assesses a diff')
+  .action(async (options: { kind: EvidenceKind; summary: string; command: string; url?: string; base?: string }) => evidenceRunCommand(await root(), options));
 evidence.command('list')
   .description('List evidence for the current head')
   .option('--all', 'include evidence from previous heads')

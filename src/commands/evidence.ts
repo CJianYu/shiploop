@@ -4,7 +4,7 @@ import { ui } from '../ui.js';
 
 export async function evidenceAddCommand(
   cwd: string,
-  options: { kind: EvidenceKind; summary: string; command?: string; url?: string },
+  options: { kind: EvidenceKind; summary: string; command?: string; url?: string; base?: string },
 ): Promise<void> {
   const record = await addEvidence(cwd, options);
   ui.ok(`Recorded ${record.kind} evidence for ${record.headSha.slice(0, 12)}.`);
@@ -13,7 +13,7 @@ export async function evidenceAddCommand(
 
 export async function evidenceRunCommand(
   cwd: string,
-  options: { kind: EvidenceKind; summary: string; command: string; url?: string },
+  options: { kind: EvidenceKind; summary: string; command: string; url?: string; base?: string },
 ): Promise<void> {
   const record = await runEvidence(cwd, options);
   ui.ok(`Verified and recorded ${record.kind} evidence in ${((record.durationMs ?? 0) / 1000).toFixed(1)}s.`);
@@ -36,6 +36,7 @@ export async function evidenceListCommand(
   for (const record of records) {
     console.log(`- [${record.kind}] ${record.summary} (${record.source}, ${record.headSha.slice(0, 12)})`);
     if (record.command) console.log(`  command: ${record.command}`);
+    if (record.baseSha) console.log(`  base: ${record.baseSha}`);
     if (record.url) console.log(`  url: ${record.url}`);
   }
 }

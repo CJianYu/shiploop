@@ -73,6 +73,7 @@ export interface EvidenceRecord {
   summary: string;
   source: 'attestation' | 'command';
   headSha: string;
+  baseSha?: string;
   createdAt: string;
   command?: string;
   url?: string;

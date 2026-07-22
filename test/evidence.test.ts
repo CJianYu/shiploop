@@ -34,9 +34,11 @@ describe('head-bound evidence', () => {
       kind: 'review',
       summary: 'Source-aware review is clean',
       command: 'node -e "process.exit(0)"',
+      base: 'HEAD',
     });
     expect(record.source).toBe('command');
     expect(record.durationMs).toBeGreaterThanOrEqual(0);
+    expect(record.baseSha).toBe(record.headSha);
     await expect(runEvidence(root, {
       kind: 'security',
       summary: 'Security scan',

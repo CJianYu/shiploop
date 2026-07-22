@@ -85,9 +85,10 @@ export function normalizeChecks(value: unknown): PullRequestCheck[] {
       ...(startedAt ? { startedAt } : {}),
       ...(workflow ? { workflow } : {}),
     };
+    const actionsRunId = url.match(/\/actions\/runs\/(\d+)(?:\/|$)/)?.[1];
     const identity = raw.context
       ? `context:${text(raw.context)}`
-      : workflow ? `workflow:${workflow}:${name}` : `unknown:${index}:${name}`;
+      : actionsRunId ? `actions:${actionsRunId}:${name}` : `unknown:${index}:${name}`;
     return { identity, check };
   });
   const latest = new Map<string, PullRequestCheck>();
@@ -202,7 +203,8 @@ export async function assessPullRequest(
   const classifiedFiles = classifyFiles(snapshot.files, config);
   const risk = snapshot.files.includes('.shiploop/config.yml') ? 'high' : highestRisk(classifiedFiles);
   const evidence = await listEvidence(root, { head: snapshot.headSha });
-  const kinds = new Set(evidence.map((record) => record.kind));
+  const baseBoundEvidence = evidence.filter((record) => record.baseSha === snapshot.baseSha);
+  const kinds = new Set(baseBoundEvidence.map((record) => record.kind));
   const missingEvidence = policy.requiredEvidence.filter((kind) => !kinds.has(kind));
   const checks = {
     passing: snapshot.checks.filter((check) => check.state === 'passing'),

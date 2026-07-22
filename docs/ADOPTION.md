@@ -66,11 +66,13 @@ Install and authenticate the GitHub CLI, then record evidence only after the fin
 ```bash
 shiploop evidence run \
   --kind review \
+  --base origin/main \
   --summary "Source-aware review completed" \
   --command "codex review --base origin/main"
 
 shiploop evidence add \
   --kind real \
+  --base origin/main \
   --summary "Verified the repaired behavior in a real browser" \
   --url "https://example.com/run/123"
 
@@ -79,8 +81,8 @@ shiploop pr checks --logs
 shiploop pr brief
 ```
 
-Evidence lives under Git's common directory rather than in the working tree. Every record contains
-the exact current head SHA; a new commit makes earlier evidence ineligible for that PR head.
+Evidence lives under Git's common directory rather than in the working tree. Diff-aware evidence
+contains the exact head and base SHAs; a new commit or an advancing base invalidates it for that PR.
 
 After branch protection and GitHub auto-merge are configured, a maintainer may arm a low-risk PR:
 

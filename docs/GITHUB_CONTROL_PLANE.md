@@ -8,15 +8,15 @@ GitHub CLI remains the authenticated transport.
 
 ```text
 final commit
-  ├─ exact-head evidence (.git/shiploop/evidence.json)
+  ├─ exact head+base evidence (.git/shiploop/evidence.json)
   ├─ remote checks and review decision (GitHub)
   ├─ changed-file risk (.shiploop/config.yml)
   └─ maintainer confirmation (--confirm PR_NUMBER)
        └─ GitHub auto-merge, still bounded by branch protection
 ```
 
-Evidence is deliberately attached to a commit SHA rather than a branch name. Updating a PR creates
-a new head and invalidates evidence from the earlier revision for merge-gate purposes.
+Diff-aware evidence is deliberately attached to head and base commit SHAs rather than branch names.
+Updating the PR or advancing its base invalidates evidence from the earlier diff.
 
 ## Evidence
 
@@ -25,12 +25,14 @@ Use `evidence run` when a command can establish the claim:
 ```bash
 shiploop evidence run \
   --kind review \
+  --base origin/main \
   --summary "Codex source-aware review completed" \
   --command "codex review --base origin/main"
 ```
 
 The record is written only when the worktree and index are clean, the command exits successfully,
-and the Git head remains stable. Concurrent writers are serialized in Git's common directory.
+and the Git head remains stable. `--base` resolves the reviewed base ref to an immutable SHA.
+Concurrent writers are serialized in Git's common directory.
 Use a review adapter that exits nonzero when actionable findings should block a merge if your policy
 requires a clean result rather than proof that a review was completed.
 Use `evidence add` for proof that lives outside the terminal, such as a browser recording, device
