@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { baseConfig } from '../src/config.js';
 import { addEvidence } from '../src/evidence.js';
-import { assessPullRequest, parsePullRequest, parsePullRequestFiles } from '../src/github.js';
+import { assessPullRequest, parseBranchRules, parsePullRequest, parsePullRequestFiles } from '../src/github.js';
 import { run } from '../src/lib/process.js';
 
 async function repository(): Promise<{ root: string; head: string }> {
@@ -35,6 +35,8 @@ function rawPullRequest(head: string): Record<string, unknown> {
     files: [{ path: 'src/auth/session.ts' }],
     changedFiles: 1,
     requiresStrictStatusChecks: true,
+    requiresMergeQueue: false,
+    branchRulesKnown: true,
     statusCheckRollup: [
       { name: 'test', workflowName: 'CI', detailsUrl: 'https://github.com/example/repo/actions/runs/100/job/2', status: 'COMPLETED', conclusion: 'SUCCESS', completedAt: '2026-01-01T00:01:00Z' },
     ],
@@ -162,6 +164,21 @@ describe('GitHub PR control plane', () => {
     raw.requiresStrictStatusChecks = false;
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
     expect(value.blockers).toContain('Base branch does not require strict up-to-date status checks.');
+    expect(value.readyToMerge).toBe(false);
+  });
+
+  it('recognizes strict rulesets and rejects merge queues', async () => {
+    expect(parseBranchRules([
+      { type: 'required_status_checks', parameters: { strict_required_status_checks_policy: true } },
+      { type: 'merge_queue' },
+    ])).toEqual({ strictStatusChecks: true, mergeQueue: true });
+
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.requiresMergeQueue = true;
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.blockers).toContain('Base branch requires a merge queue, which exact-diff merge does not support.');
     expect(value.readyToMerge).toBe(false);
   });
 

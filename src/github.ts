@@ -32,6 +32,8 @@ export interface PullRequestSnapshot {
   listedFileCount: number;
   changedFileCount: number;
   requiresStrictStatusChecks: boolean;
+  requiresMergeQueue: boolean;
+  branchRulesKnown: boolean;
   checks: PullRequestCheck[];
 }
 
@@ -131,6 +133,8 @@ export function parsePullRequest(value: unknown): PullRequestSnapshot {
     listedFileCount: files.length,
     changedFileCount: typeof raw.changedFiles === 'number' ? raw.changedFiles : files.length,
     requiresStrictStatusChecks: raw.requiresStrictStatusChecks === true,
+    requiresMergeQueue: raw.requiresMergeQueue === true,
+    branchRulesKnown: raw.branchRulesKnown === true,
     checks: normalizeChecks(raw.statusCheckRollup),
   };
 }
@@ -160,10 +164,28 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
     if (protectionResult.code === 0) {
       snapshot.requiresStrictStatusChecks = object(JSON.parse(protectionResult.stdout)).strict === true;
     }
+    const rulesResult = await runArgs('gh', [
+      'api', `repos/${repository}/rules/branches/${encodeURIComponent(snapshot.baseRefName)}`,
+    ], root);
+    if (rulesResult.code === 0) {
+      const rules = parseBranchRules(JSON.parse(rulesResult.stdout));
+      snapshot.branchRulesKnown = true;
+      snapshot.requiresStrictStatusChecks ||= rules.strictStatusChecks;
+      snapshot.requiresMergeQueue = rules.mergeQueue;
+    }
     return snapshot;
   } catch (error) {
     throw new Error(`Cannot parse the GitHub pull request: ${(error as Error).message}`);
   }
+}
+
+export function parseBranchRules(value: unknown): { strictStatusChecks: boolean; mergeQueue: boolean } {
+  const rules = Array.isArray(value) ? value.map(object) : [];
+  return {
+    strictStatusChecks: rules.some((rule) => rule.type === 'required_status_checks'
+      && object(rule.parameters).strict_required_status_checks_policy === true),
+    mergeQueue: rules.some((rule) => rule.type === 'merge_queue'),
+  };
 }
 
 export function repositoryFromPullRequestUrl(url: string): string | undefined {
@@ -225,6 +247,8 @@ export async function assessPullRequest(
   if (!snapshot.requiresStrictStatusChecks) {
     blockers.push('Base branch does not require strict up-to-date status checks.');
   }
+  if (!snapshot.branchRulesKnown) blockers.push('GitHub branch rules could not be verified.');
+  if (snapshot.requiresMergeQueue) blockers.push('Base branch requires a merge queue, which exact-diff merge does not support.');
   if (snapshot.mergeStateStatus === 'DIRTY') blockers.push('PR has merge conflicts.');
   else if (snapshot.mergeStateStatus !== 'CLEAN') {
     blockers.push(`GitHub merge state is ${snapshot.mergeStateStatus || 'unknown'}, not clean.`);
