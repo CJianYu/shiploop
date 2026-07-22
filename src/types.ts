@@ -1,4 +1,7 @@
 export type Profile = 'solo-fast' | 'team-pr' | 'regulated';
+export type EvidenceKind = 'proof' | 'real' | 'review' | 'security';
+export type MergeMethod = 'squash' | 'merge' | 'rebase';
+export type PolicyRiskLevel = 'low' | 'medium' | 'high';
 
 export interface ProofStep {
   name: string;
@@ -26,6 +29,12 @@ export interface ShiploopConfig {
   commit: {
     conventional: boolean;
     maxSubjectLength: number;
+  };
+  github?: {
+    requiredEvidence: EvidenceKind[];
+    maxAutomergeRisk: PolicyRiskLevel;
+    requireApproval: boolean;
+    mergeMethod: MergeMethod;
   };
 }
 
@@ -55,4 +64,17 @@ export interface ProofReceipt {
     code: number;
     durationMs: number;
   }>;
+}
+
+export interface EvidenceRecord {
+  version: 1;
+  id: string;
+  kind: EvidenceKind;
+  summary: string;
+  source: 'attestation' | 'command';
+  headSha: string;
+  createdAt: string;
+  command?: string;
+  url?: string;
+  durationMs?: number;
 }

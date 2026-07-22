@@ -41,3 +41,9 @@ risk:
 commit:
   conventional: true
   maxSubjectLength: 72
+github:
+  requiredEvidence:
+    - review
+  maxAutomergeRisk: low
+  requireApproval: false
+  mergeMethod: squash

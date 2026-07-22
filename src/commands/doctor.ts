@@ -44,6 +44,21 @@ export async function doctorCommand(cwd: string, options: { json?: boolean }): P
     name: 'proof', status: config.proof.steps.length ? 'pass' : 'warn',
     detail: config.proof.steps.length ? `${config.proof.steps.length} configured step(s)` : 'No proof steps configured',
   });
+  if (config.github) {
+    const locator = process.platform === 'win32' ? 'where' : 'which';
+    const ghFound = (await runArgs(locator, ['gh'], cwd)).code === 0;
+    checks.push({
+      name: 'github:gh', status: ghFound ? 'pass' : 'warn',
+      detail: ghFound ? 'GitHub CLI available' : 'GitHub CLI not found; PR commands are unavailable',
+    });
+    if (ghFound) {
+      const authenticated = (await runArgs('gh', ['auth', 'status'], cwd)).code === 0;
+      checks.push({
+        name: 'github:auth', status: authenticated ? 'pass' : 'warn',
+        detail: authenticated ? 'GitHub CLI authenticated' : 'Run gh auth login before using PR commands',
+      });
+    }
+  }
   const branch = await currentBranch(cwd);
   const branchOkay = config.repository.strategy !== 'main-first' || branch === config.repository.defaultBranch;
   checks.push({

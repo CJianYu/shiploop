@@ -5,14 +5,16 @@ import { closeoutCommand } from './commands/closeout.js';
 import { commitCommand } from './commands/commit.js';
 import { contextCommand } from './commands/context.js';
 import { doctorCommand } from './commands/doctor.js';
+import { evidenceAddCommand, evidenceListCommand, evidenceRunCommand } from './commands/evidence.js';
 import { hooksInstallCommand, hooksStatusCommand } from './commands/hooks.js';
 import { initCommand } from './commands/init.js';
 import { laneFinishCommand, laneStartCommand, laneStatusCommand } from './commands/lane.js';
 import { proofCommand } from './commands/proof.js';
+import { prBriefCommand, prChecksCommand, prInspectCommand, prMergeCommand } from './commands/pr.js';
 import { reviewCommand } from './commands/review.js';
 import { taskCommand } from './commands/task.js';
 import { gitRoot, isGitRepository } from './lib/git.js';
-import type { Profile } from './types.js';
+import type { EvidenceKind, PolicyRiskLevel, Profile } from './types.js';
 import { ui } from './ui.js';
 
 const program = new Command();
@@ -97,6 +99,53 @@ program.command('review')
   .option('--diff', 'open the full textual diff after the risk summary')
   .option('--json', 'emit machine-readable output')
   .action(async (options: { diff?: boolean; json?: boolean }) => reviewCommand(await root(), options));
+
+const evidence = program.command('evidence').description('Record head-bound proof, review, and real-behavior evidence');
+evidence.command('add')
+  .description('Attest external evidence for the current Git head')
+  .addOption(new Option('--kind <kind>', 'evidence kind').choices(['proof', 'real', 'review', 'security']).makeOptionMandatory())
+  .requiredOption('--summary <summary>', 'short description of what the evidence proves')
+  .option('--command <command>', 'command that produced the external evidence')
+  .option('--url <url>', 'artifact, run, screenshot, or report URL')
+  .action(async (options: { kind: EvidenceKind; summary: string; command?: string; url?: string }) => evidenceAddCommand(await root(), options));
+evidence.command('run')
+  .description('Run a command and record evidence only when it succeeds on a stable head')
+  .addOption(new Option('--kind <kind>', 'evidence kind').choices(['proof', 'real', 'review', 'security']).makeOptionMandatory())
+  .requiredOption('--summary <summary>', 'short description of what the command proves')
+  .requiredOption('--command <command>', 'command to execute')
+  .option('--url <url>', 'artifact or report URL associated with the command')
+  .action(async (options: { kind: EvidenceKind; summary: string; command: string; url?: string }) => evidenceRunCommand(await root(), options));
+evidence.command('list')
+  .description('List evidence for the current head')
+  .option('--all', 'include evidence from previous heads')
+  .option('--json', 'emit machine-readable output')
+  .action(async (options: { all?: boolean; json?: boolean }) => evidenceListCommand(await root(), options));
+
+const pr = program.command('pr').description('Inspect and gate GitHub pull requests with local policy');
+pr.command('inspect')
+  .description('Combine PR metadata, checks, risk, and exact-head evidence')
+  .argument('[selector]', 'PR number, URL, or branch; defaults to the current branch PR')
+  .option('--json', 'emit machine-readable output')
+  .action(async (selector: string | undefined, options: { json?: boolean }) => prInspectCommand(await root(), selector, options));
+pr.command('checks')
+  .description('Summarize current-head GitHub checks and optionally show failed logs')
+  .argument('[selector]', 'PR number, URL, or branch; defaults to the current branch PR')
+  .option('--logs', 'stream failed GitHub Actions logs')
+  .option('--json', 'emit machine-readable output')
+  .action(async (selector: string | undefined, options: { logs?: boolean; json?: boolean }) => prChecksCommand(await root(), selector, options));
+pr.command('brief')
+  .description('Render a Markdown readiness block for the PR description')
+  .argument('[selector]', 'PR number, URL, or branch; defaults to the current branch PR')
+  .action(async (selector?: string) => prBriefCommand(await root(), selector));
+pr.command('merge')
+  .description('Explicitly arm policy-bounded GitHub auto-merge')
+  .argument('[selector]', 'PR number, URL, or branch; defaults to the current branch PR')
+  .requiredOption('--confirm <number>', 'exact PR number acknowledging a remote merge mutation')
+  .addOption(new Option('--allow-risk <level>', 'explicit risk ceiling override').choices(['low', 'medium', 'high']))
+  .action(async (
+    selector: string | undefined,
+    options: { confirm: string; allowRisk?: PolicyRiskLevel },
+  ) => prMergeCommand(await root(), selector, options));
 
 program.command('commit')
   .description('Commit an explicit set of files as one logical change')

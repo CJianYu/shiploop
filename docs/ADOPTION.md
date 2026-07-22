@@ -59,6 +59,39 @@ overlap is rejected before a lane starts. Finish a lane when its logical change 
 shiploop lane finish "Auth cleanup"
 ```
 
+## Stage 6: evidence and PR gates
+
+Install and authenticate the GitHub CLI, then record evidence only after the final commit exists:
+
+```bash
+shiploop evidence run \
+  --kind review \
+  --summary "Source-aware review clean" \
+  --command "codex review --base origin/main"
+
+shiploop evidence add \
+  --kind real \
+  --summary "Verified the repaired behavior in a real browser" \
+  --url "https://example.com/run/123"
+
+shiploop pr inspect
+shiploop pr checks --logs
+shiploop pr brief
+```
+
+Evidence lives under Git's common directory rather than in the working tree. Every record contains
+the exact current head SHA; a new commit makes earlier evidence ineligible for that PR head.
+
+After branch protection and GitHub auto-merge are configured, a maintainer may arm a low-risk PR:
+
+```bash
+shiploop pr merge --confirm 123
+```
+
+This command does not weaken GitHub branch protection. It refuses drafts, conflicts, requested
+changes, failing checks, missing configured evidence, and risk above the configured ceiling. The
+exact PR number is a mandatory acknowledgement because the operation mutates remote merge state.
+
 ## Profile guidance
 
 - `solo-fast`: maintainer controls the repository and can forward-fix quickly.

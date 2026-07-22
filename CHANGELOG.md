@@ -5,6 +5,17 @@ Keep a Changelog categories.
 
 ## [Unreleased]
 
+### Added
+
+- Exact-head evidence records for command-verified review, real-behavior, proof, and security runs.
+- GitHub PR inspection combining check state, changed-file risk, reviews, and local evidence.
+- Failed Actions log retrieval and Markdown readiness blocks for PR descriptions.
+- Policy-bounded auto-merge with explicit PR-number confirmation and configurable risk ceilings.
+
+### Changed
+
+- Generated profiles now include compatible GitHub evidence and merge policy defaults.
+
 ## [0.1.0] - 2026-07-18
 
 ### Added
