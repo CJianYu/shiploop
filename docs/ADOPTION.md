@@ -84,7 +84,7 @@ shiploop pr brief
 Evidence lives under Git's common directory rather than in the working tree. Diff-aware evidence
 contains the exact head and base SHAs; a new commit or an advancing base invalidates it for that PR.
 
-After branch protection is configured and every visible check has finished, a maintainer may merge a low-risk PR:
+After branch protection is configured and every required check has finished, a maintainer may merge a low-risk PR:
 
 ```bash
 shiploop pr merge --confirm 123

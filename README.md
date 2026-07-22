@@ -31,8 +31,8 @@ bottleneck. Shiploop turns repository policy into executable commands:
 - `shiploop commit` refuses `.` and globs, requires explicit files, and prevents staged spillover.
 - `shiploop closeout` checks cleanliness, proof freshness, branch policy, and upstream sync.
 - `shiploop evidence` records review and real-behavior proof against an exact commit SHA.
-- `shiploop pr inspect` combines GitHub checks, changed-file risk, reviews, and local evidence.
-- `shiploop pr checks --logs` surfaces failing Actions logs without hiding red checks.
+- `shiploop pr inspect` combines required GitHub checks, changed-file risk, reviews, and local evidence.
+- `shiploop pr checks --logs` surfaces failing required Actions logs without hiding red checks.
 - `shiploop pr merge` merges only after policy gates and exact-number confirmation.
 - Guarded merges require strict up-to-date checks and branch protection enforced for administrators.
 

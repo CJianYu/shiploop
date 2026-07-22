@@ -52,7 +52,7 @@ Supported kinds are:
 
 - exact head SHA and base branch;
 - changed files classified by repository risk rules;
-- latest attempt for each GitHub check;
+- latest attempt for each remotely required GitHub check;
 - review decision, draft state, and merge conflicts;
 - evidence matching the exact remote head;
 - every blocker that prevents a guarded merge.
@@ -62,9 +62,10 @@ instead of applying a partial risk classification when GitHub returns a truncate
 classified using both the old and new paths. Merge policy is loaded from the exact GitHub base SHA,
 so neither an uncommitted local edit nor the PR itself can relax its own gate.
 
-Shiploop uses `gh pr checks` so check contexts beyond GitHub's first GraphQL page are included; if
-the complete rollup cannot be verified, merge assessment fails closed. `shiploop pr checks --logs`
-streams failed GitHub Actions logs when check URLs expose run IDs.
+Shiploop uses `gh pr checks --required` so required contexts beyond GitHub's first GraphQL page are
+included and every check used by the merge gate is enforced atomically by GitHub. If the complete
+required rollup cannot be verified, merge assessment fails closed. `shiploop pr checks --logs`
+streams failed required GitHub Actions logs when check URLs expose run IDs.
 `shiploop pr brief` renders a Markdown block suitable for a PR description or maintainer handoff.
 
 ## Merge safety

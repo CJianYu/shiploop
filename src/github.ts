@@ -173,6 +173,7 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
     const checksResult = await runArgs('gh', [
       'pr', 'checks', snapshot.url,
       '--json', 'name,state,bucket,link,startedAt,completedAt,workflow',
+      '--required',
     ], root);
     try {
       const checks = JSON.parse(checksResult.stdout) as unknown;
