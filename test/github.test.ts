@@ -180,6 +180,16 @@ describe('GitHub PR control plane', () => {
     expect(value.readyToMerge).toBe(false);
   });
 
+  it('permits an unstable merge state when every required check passes', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.mergeStateStatus = 'UNSTABLE';
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.blockers).not.toContain(expect.stringContaining('merge state'));
+    expect(value.readyToMerge).toBe(true);
+  });
+
   it('requires remote strict status checks to close the base race', async () => {
     const { root, head } = await repository();
     const raw = rawPullRequest(head);

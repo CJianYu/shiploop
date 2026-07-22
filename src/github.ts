@@ -293,7 +293,7 @@ export async function assessPullRequest(
   if (!snapshot.checksKnown) blockers.push('The complete GitHub check rollup could not be verified.');
   if (snapshot.requiresMergeQueue) blockers.push('Base branch requires a merge queue, which exact-diff merge does not support.');
   if (snapshot.mergeStateStatus === 'DIRTY') blockers.push('PR has merge conflicts.');
-  else if (snapshot.mergeStateStatus !== 'CLEAN') {
+  else if (!['CLEAN', 'UNSTABLE'].includes(snapshot.mergeStateStatus)) {
     blockers.push(`GitHub merge state is ${snapshot.mergeStateStatus || 'unknown'}, not clean.`);
   }
   if (snapshot.reviewDecision === 'CHANGES_REQUESTED') blockers.push('A reviewer requested changes.');
