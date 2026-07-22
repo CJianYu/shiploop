@@ -140,7 +140,7 @@ pr.command('brief')
   .argument('[selector]', 'PR number, URL, or branch; defaults to the current branch PR')
   .action(async (selector?: string) => prBriefCommand(await root(), selector));
 pr.command('merge')
-  .description('Explicitly arm policy-bounded GitHub auto-merge')
+  .description('Explicitly perform a policy-bounded GitHub merge')
   .argument('[selector]', 'PR number, URL, or branch; defaults to the current branch PR')
   .requiredOption('--confirm <number>', 'exact PR number acknowledging a remote merge mutation')
   .addOption(new Option('--allow-risk <level>', 'explicit risk ceiling override').choices(['low', 'medium', 'high']))

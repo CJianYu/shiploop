@@ -61,14 +61,14 @@
     "github": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["requiredEvidence", "maxAutomergeRisk", "requireApproval", "mergeMethod"],
+      "required": ["requiredEvidence", "maxMergeRisk", "requireApproval", "mergeMethod"],
       "properties": {
         "requiredEvidence": {
           "type": "array",
           "uniqueItems": true,
           "items": { "enum": ["proof", "real", "review", "security"] }
         },
-        "maxAutomergeRisk": { "enum": ["low", "medium", "high"] },
+        "maxMergeRisk": { "enum": ["low", "medium", "high"] },
         "requireApproval": { "type": "boolean" },
         "mergeMethod": { "enum": ["squash", "merge", "rebase"] }
       }

@@ -48,7 +48,7 @@ export function baseConfig(profile: Profile): ShiploopConfig {
     },
     github: {
       requiredEvidence: profile === 'regulated' ? ['review', 'real'] : profile === 'team-pr' ? ['review'] : [],
-      maxAutomergeRisk: 'low',
+      maxMergeRisk: 'low',
       requireApproval: profile === 'regulated',
       mergeMethod: 'squash',
     },
@@ -58,7 +58,7 @@ export function baseConfig(profile: Profile): ShiploopConfig {
 export function githubPolicy(config: ShiploopConfig): NonNullable<ShiploopConfig['github']> {
   return config.github ?? {
     requiredEvidence: [],
-    maxAutomergeRisk: 'low',
+    maxMergeRisk: 'low',
     requireApproval: false,
     mergeMethod: 'squash',
   };
@@ -128,8 +128,8 @@ function assertConfig(value: unknown): asserts value is ShiploopConfig {
       || config.github.requiredEvidence.some((item) => !validEvidence.includes(item))) {
       throw new Error('github.requiredEvidence contains an unsupported evidence kind.');
     }
-    if (!['low', 'medium', 'high'].includes(config.github.maxAutomergeRisk)) {
-      throw new Error('github.maxAutomergeRisk must be low, medium, or high.');
+    if (!['low', 'medium', 'high'].includes(config.github.maxMergeRisk)) {
+      throw new Error('github.maxMergeRisk must be low, medium, or high.');
     }
     if (typeof config.github.requireApproval !== 'boolean') {
       throw new Error('github.requireApproval must be boolean.');

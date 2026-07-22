@@ -55,7 +55,7 @@ describe('GitHub PR control plane', () => {
     await addEvidence(root, { kind: 'review', summary: 'Review clean', base: 'HEAD' });
     snapshot.baseSha = head;
     const ready = await assessPullRequest(root, snapshot, config, { allowRisk: 'high' });
-    expect(ready.readyToArm).toBe(true);
+    expect(ready.readyToMerge).toBe(true);
     expect(ready.evidence).toHaveLength(1);
   });
 
@@ -107,7 +107,7 @@ describe('GitHub PR control plane', () => {
     raw.statusCheckRollup = [{ name: 'test', workflowName: 'CI', status: 'COMPLETED', conclusion: 'STARTUP_FAILURE' }];
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
     expect(value.checks.failing).toHaveLength(1);
-    expect(value.readyToArm).toBe(false);
+    expect(value.readyToMerge).toBe(false);
   });
 
   it('includes both sides of a rename in risk input', () => {
@@ -123,7 +123,7 @@ describe('GitHub PR control plane', () => {
     raw.files = [{ path: '.shiploop/config.yml' }];
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
     expect(value.risk).toBe('high');
-    expect(value.readyToArm).toBe(false);
+    expect(value.readyToMerge).toBe(false);
   });
 
   it('blocks drafts, requested changes, conflicts, and current failing checks', async () => {
@@ -150,7 +150,7 @@ describe('GitHub PR control plane', () => {
     raw.files = Array.from({ length: 100 }, (_, index) => ({ path: `src/file-${index}.ts` }));
     raw.changedFiles = 101;
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
-    expect(value.readyToArm).toBe(false);
+    expect(value.readyToMerge).toBe(false);
     expect(value.blockers).toContain('GitHub returned 100 of 101 changed files; risk cannot be assessed safely.');
   });
 });

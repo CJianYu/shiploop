@@ -32,7 +32,7 @@ export interface ShiploopConfig {
   };
   github?: {
     requiredEvidence: EvidenceKind[];
-    maxAutomergeRisk: PolicyRiskLevel;
+    maxMergeRisk: PolicyRiskLevel;
     requireApproval: boolean;
     mergeMethod: MergeMethod;
   };

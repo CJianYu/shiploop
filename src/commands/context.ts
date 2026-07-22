@@ -34,7 +34,7 @@ export async function contextCommand(
       'Deep-read high-risk changes even when automated proof passes.',
       'Commit only explicit files as one logical change.',
       'Bind review and real-behavior evidence to the final Git head before merge.',
-      'Remote auto-merge requires explicit maintainer confirmation and every configured gate.',
+      'Remote merge requires explicit maintainer confirmation and every configured gate.',
     ],
     proof: config.proof.steps.map(({ name, command, required, quick, when }) => ({ name, command, required, quick: Boolean(quick), when: when ?? [] })),
     changedFiles: files,

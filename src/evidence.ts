@@ -103,6 +103,9 @@ export async function runEvidence(
   const result = await run(input.command, root, { inherit: true });
   if (result.code !== 0) throw new Error(`Evidence command failed with exit code ${result.code}; nothing was recorded.`);
   await requireCleanHead(root, expectedHead);
+  if (input.base && await resolveCommit(root, input.base) !== baseSha) {
+    throw new Error('The Git base ref changed while evidence was running; nothing was recorded.');
+  }
   const record: EvidenceRecord = {
     version: 1,
     id: randomUUID(),

@@ -33,7 +33,7 @@ bottleneck. Shiploop turns repository policy into executable commands:
 - `shiploop evidence` records review and real-behavior proof against an exact commit SHA.
 - `shiploop pr inspect` combines GitHub checks, changed-file risk, reviews, and local evidence.
 - `shiploop pr checks --logs` surfaces failing Actions logs without hiding red checks.
-- `shiploop pr merge` arms auto-merge only after policy gates and exact-number confirmation.
+- `shiploop pr merge` merges only after policy gates and exact-number confirmation.
 
 No model is hard-coded. Use Shiploop with Codex, Claude Code, Cursor, a shell script, or a human.
 
@@ -127,7 +127,7 @@ commit:
 github:
   requiredEvidence:
     - review
-  maxAutomergeRisk: low
+  maxMergeRisk: low
   requireApproval: false
   mergeMethod: squash
 ```

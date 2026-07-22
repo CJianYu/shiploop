@@ -45,6 +45,6 @@ commit:
 github:
   requiredEvidence:
     - review
-  maxAutomergeRisk: low
+  maxMergeRisk: low
   requireApproval: false
   mergeMethod: squash

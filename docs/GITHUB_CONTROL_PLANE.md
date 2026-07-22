@@ -12,7 +12,7 @@ final commit
   ├─ remote checks and review decision (GitHub)
   ├─ changed-file risk (.shiploop/config.yml)
   └─ maintainer confirmation (--confirm PR_NUMBER)
-       └─ GitHub auto-merge, still bounded by branch protection
+       └─ immediate GitHub merge, still bounded by branch protection
 ```
 
 Diff-aware evidence is deliberately attached to head and base commit SHAs rather than branch names.
@@ -55,7 +55,7 @@ Supported kinds are:
 - latest attempt for each GitHub check;
 - review decision, draft state, and merge conflicts;
 - evidence matching the exact remote head;
-- every blocker that prevents arming auto-merge.
+- every blocker that prevents a guarded merge.
 
 GitHub CLI file results are checked against the PR's total changed-file count. Shiploop fails closed
 instead of applying a partial risk classification when GitHub returns a truncated list. Renames are
@@ -65,14 +65,14 @@ so neither an uncommitted local edit nor the PR itself can relax its own gate.
 `shiploop pr checks --logs` streams failed GitHub Actions logs when check URLs expose run IDs.
 `shiploop pr brief` renders a Markdown block suitable for a PR description or maintainer handoff.
 
-## Auto-merge safety
+## Merge safety
 
-`shiploop pr merge` only arms GitHub auto-merge. It requires `--confirm` to exactly equal the PR
-number. It does not press through failing checks, missing evidence, requested changes, conflicts, or
-the configured risk ceiling. The assessed head SHA is also sent to GitHub, closing the window where
-a newly pushed commit could otherwise inherit an earlier decision. Shiploop also waits for every
-visible check—not only branch-protection requirements—to finish successfully before it mutates merge
-state. GitHub branch protection remains the final merge authority.
+`shiploop pr merge` requires `--confirm` to exactly equal the PR number. It does not press through
+failing or pending checks, missing evidence, requested changes, conflicts, or the configured risk
+ceiling. The assessed head SHA is sent to GitHub, closing the window where a newly pushed commit could
+inherit an earlier decision. Shiploop performs the merge immediately rather than leaving asynchronous
+auto-merge armed, because GitHub cannot pin the assessed base SHA while waiting. GitHub branch
+protection remains the final merge authority and may still reject the operation.
 
 Risk overrides are visible and bounded:
 

@@ -45,7 +45,7 @@ export interface PullRequestAssessment {
     failing: PullRequestCheck[];
   };
   blockers: string[];
-  readyToArm: boolean;
+  readyToMerge: boolean;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -223,7 +223,7 @@ export async function assessPullRequest(
     blockers.push(`GitHub returned ${snapshot.listedFileCount} of ${snapshot.changedFileCount} changed files; risk cannot be assessed safely.`);
   }
   if (missingEvidence.length) blockers.push(`Missing required evidence: ${missingEvidence.join(', ')}.`);
-  const allowedRisk = options.allowRisk ?? policy.maxAutomergeRisk;
+  const allowedRisk = options.allowRisk ?? policy.maxMergeRisk;
   if (riskRank(risk) > riskRank(allowedRisk)) blockers.push(`Risk is ${risk}; policy allows ${allowedRisk}.`);
   return {
     risk,
@@ -232,6 +232,6 @@ export async function assessPullRequest(
     missingEvidence,
     checks,
     blockers,
-    readyToArm: blockers.length === 0,
+    readyToMerge: blockers.length === 0,
   };
 }

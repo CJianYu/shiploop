@@ -17,7 +17,7 @@ function printSummary(snapshot: PullRequestSnapshot, assessment: PullRequestAsse
   console.log(`URL: ${snapshot.url}`);
   console.log(`Checks: ${assessment.checks.passing.length} passing, ${assessment.checks.pending.length} pending, ${assessment.checks.failing.length} failing`);
   console.log(`Evidence: ${assessment.evidence.length ? assessment.evidence.map((item) => item.kind).join(', ') : 'none for this head'}`);
-  if (assessment.readyToArm) ui.ok('Ready to arm for policy-bounded auto-merge.');
+  if (assessment.readyToMerge) ui.ok('Ready for a policy-bounded merge.');
   else {
     ui.warn('Not ready to arm:');
     for (const blocker of assessment.blockers) console.log(`  - ${blocker}`);
@@ -95,7 +95,7 @@ export async function prBriefCommand(cwd: string, selector?: string): Promise<vo
     if (item.command) console.log(`  - Command: \`${item.command.replaceAll('`', '\\`')}\``);
   }
   console.log('\n### Policy gate');
-  if (assessment.readyToArm) console.log('\n- Ready to arm for policy-bounded auto-merge.');
+  if (assessment.readyToMerge) console.log('\n- Ready for a policy-bounded merge.');
   else for (const blocker of assessment.blockers) console.log(`\n- [ ] ${blocker}`);
   console.log(`\n<!-- shiploop-readiness:v1 head=${snapshot.headSha} -->`);
 }
@@ -109,16 +109,16 @@ export async function prMergeCommand(
   if (options.confirm !== String(snapshot.number)) {
     throw new Error(`Confirmation must exactly match PR number ${snapshot.number}.`);
   }
-  if (!assessment.readyToArm) {
-    throw new Error(`Refusing to arm auto-merge:\n${assessment.blockers.map((item) => `  - ${item}`).join('\n')}`);
+  if (!assessment.readyToMerge) {
+    throw new Error(`Refusing to merge:\n${assessment.blockers.map((item) => `  - ${item}`).join('\n')}`);
   }
   const method = githubPolicy(config).mergeMethod;
   const result = await runArgs('gh', [
-    'pr', 'merge', snapshot.url, '--auto', `--${method}`, '--match-head-commit', snapshot.headSha,
+    'pr', 'merge', snapshot.url, `--${method}`, '--match-head-commit', snapshot.headSha,
   ], cwd, { inherit: true });
   if (result.code !== 0) {
     process.exitCode = result.code;
     return;
   }
-  ui.ok(`Armed PR #${snapshot.number} for ${method} auto-merge.`);
+  ui.ok(`Merged PR #${snapshot.number} with ${method}.`);
 }
