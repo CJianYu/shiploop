@@ -70,11 +70,12 @@ describe('head-bound evidence', () => {
   it('refuses diff evidence when its movable base changes during the command', async () => {
     const root = await repository();
     await run('git branch review-base HEAD', root);
+    const movedBase = (await run('git commit-tree HEAD^{tree} -m "base-2"', root)).stdout.trim();
     await expect(runEvidence(root, {
       kind: 'review',
       summary: 'Review raced the base branch',
       base: 'review-base',
-      command: 'git branch -f review-base $(git commit-tree HEAD^{tree} -m base-2)',
+      command: `git branch -f review-base ${movedBase}`,
     })).rejects.toThrow('base ref changed');
     expect(await listEvidence(root)).toHaveLength(0);
   });
