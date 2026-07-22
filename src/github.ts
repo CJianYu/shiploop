@@ -34,6 +34,7 @@ export interface PullRequestSnapshot {
   requiresStrictStatusChecks: boolean;
   protectionEnforcedForAdmins: boolean;
   requiresMergeQueue: boolean;
+  hasRulesetRequirements: boolean;
   branchRulesKnown: boolean;
   checksKnown: boolean;
   checks: PullRequestCheck[];
@@ -141,6 +142,7 @@ export function parsePullRequest(value: unknown): PullRequestSnapshot {
     requiresStrictStatusChecks: raw.requiresStrictStatusChecks === true,
     protectionEnforcedForAdmins: raw.protectionEnforcedForAdmins === true,
     requiresMergeQueue: raw.requiresMergeQueue === true,
+    hasRulesetRequirements: raw.hasRulesetRequirements === true,
     branchRulesKnown: raw.branchRulesKnown === true,
     checksKnown: raw.checksKnown === true,
     checks: normalizeChecks(raw.statusCheckRollup),
@@ -195,6 +197,7 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
       const rules = parseBranchRules(JSON.parse(rulesResult.stdout));
       snapshot.branchRulesKnown = true;
       snapshot.requiresMergeQueue = rules.mergeQueue;
+      snapshot.hasRulesetRequirements = rules.hasRequirements;
     }
     return snapshot;
   } catch (error) {
@@ -202,11 +205,12 @@ export async function fetchPullRequest(root: string, selector?: string): Promise
   }
 }
 
-export function parseBranchRules(value: unknown): { mergeQueue: boolean } {
+export function parseBranchRules(value: unknown): { mergeQueue: boolean; hasRequirements: boolean } {
   const pages = Array.isArray(value) ? value : [];
   const rules = pages.flatMap((page) => Array.isArray(page) ? page : [page]).map(object);
   return {
     mergeQueue: rules.some((rule) => rule.type === 'merge_queue'),
+    hasRequirements: rules.length > 0,
   };
 }
 
@@ -273,6 +277,9 @@ export async function assessPullRequest(
     blockers.push('Base branch protection is not enforced for administrators.');
   }
   if (!snapshot.branchRulesKnown) blockers.push('GitHub branch rules could not be verified.');
+  if (snapshot.hasRulesetRequirements) {
+    blockers.push('Active ruleset requirements cannot be proven safe from actor bypass.');
+  }
   if (!snapshot.checksKnown) blockers.push('The complete GitHub check rollup could not be verified.');
   if (snapshot.requiresMergeQueue) blockers.push('Base branch requires a merge queue, which exact-diff merge does not support.');
   if (snapshot.mergeStateStatus === 'DIRTY') blockers.push('PR has merge conflicts.');

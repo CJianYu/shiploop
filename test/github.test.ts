@@ -37,6 +37,7 @@ function rawPullRequest(head: string): Record<string, unknown> {
     requiresStrictStatusChecks: true,
     protectionEnforcedForAdmins: true,
     requiresMergeQueue: false,
+    hasRulesetRequirements: false,
     branchRulesKnown: true,
     checksKnown: true,
     statusCheckRollup: [
@@ -202,7 +203,7 @@ describe('GitHub PR control plane', () => {
     expect(parseBranchRules([
       [{ type: 'required_status_checks', parameters: { strict_required_status_checks_policy: true } }],
       [{ type: 'merge_queue' }],
-    ])).toEqual({ mergeQueue: true });
+    ])).toEqual({ mergeQueue: true, hasRequirements: true });
 
     const { root, head } = await repository();
     const raw = rawPullRequest(head);
@@ -210,6 +211,16 @@ describe('GitHub PR control plane', () => {
     raw.requiresMergeQueue = true;
     const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
     expect(value.blockers).toContain('Base branch requires a merge queue, which exact-diff merge does not support.');
+    expect(value.readyToMerge).toBe(false);
+  });
+
+  it('fails closed when any active ruleset requirement may be bypassable', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.hasRulesetRequirements = true;
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.blockers).toContain('Active ruleset requirements cannot be proven safe from actor bypass.');
     expect(value.readyToMerge).toBe(false);
   });
 

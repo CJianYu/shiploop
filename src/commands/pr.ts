@@ -96,7 +96,8 @@ export async function prBriefCommand(cwd: string, selector?: string): Promise<vo
   if (!assessment.evidence.length) console.log('\n- No evidence recorded for this exact head.');
   for (const item of assessment.evidence) {
     const suffix = item.url ? ` ([artifact](${item.url}))` : '';
-    console.log(`\n- **${item.kind}**: ${item.summary}${suffix}`);
+    const source = item.source === 'command' ? 'command-verified' : 'attested';
+    console.log(`\n- **${item.kind} (${source})**: ${item.summary}${suffix}`);
     if (item.command) console.log(`  - Command: \`${item.command.replaceAll('`', '\\`')}\``);
   }
   console.log('\n### Policy gate');
