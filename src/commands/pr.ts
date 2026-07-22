@@ -53,7 +53,7 @@ export async function prChecksCommand(
   const { snapshot, assessment } = await snapshotAndAssessment(cwd, selector);
   if (options.json) {
     console.log(JSON.stringify({ number: snapshot.number, checks: assessment.checks }, null, 2));
-    if (assessment.checks.failing.length) process.exitCode = 1;
+    if (!snapshot.checksKnown || assessment.checks.failing.length) process.exitCode = 1;
     else if (assessment.checks.pending.length) process.exitCode = 8;
     return;
   }
@@ -61,6 +61,11 @@ export async function prChecksCommand(
   for (const check of snapshot.checks) {
     const marker = check.state === 'passing' ? '✓' : check.state === 'failing' ? '✗' : '…';
     console.log(`${marker} ${check.name}${check.url ? ` · ${check.url}` : ''}`);
+  }
+  if (!snapshot.checksKnown) {
+    ui.fail('The complete GitHub check rollup could not be verified.');
+    process.exitCode = 1;
+    return;
   }
   if (options.logs && assessment.checks.failing.length) {
     const runIds = [...new Set(assessment.checks.failing.flatMap((check) => {
