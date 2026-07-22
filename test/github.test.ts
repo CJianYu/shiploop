@@ -144,6 +144,16 @@ describe('GitHub PR control plane', () => {
     ]));
   });
 
+  it('fails closed unless GitHub confirms a clean merge state', async () => {
+    const { root, head } = await repository();
+    const raw = rawPullRequest(head);
+    raw.files = [{ path: 'README.md' }];
+    raw.mergeStateStatus = 'UNKNOWN';
+    const value = await assessPullRequest(root, parsePullRequest(raw), baseConfig('solo-fast'));
+    expect(value.blockers).toContain('GitHub merge state is UNKNOWN, not clean.');
+    expect(value.readyToMerge).toBe(false);
+  });
+
   it('fails closed when GitHub truncates the changed-file list', async () => {
     const { root, head } = await repository();
     const raw = rawPullRequest(head);

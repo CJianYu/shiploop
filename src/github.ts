@@ -215,6 +215,9 @@ export async function assessPullRequest(
   if (snapshot.state !== 'OPEN') blockers.push(`PR is ${snapshot.state.toLowerCase()}, not open.`);
   if (snapshot.isDraft) blockers.push('PR is still a draft.');
   if (snapshot.mergeStateStatus === 'DIRTY') blockers.push('PR has merge conflicts.');
+  else if (snapshot.mergeStateStatus !== 'CLEAN') {
+    blockers.push(`GitHub merge state is ${snapshot.mergeStateStatus || 'unknown'}, not clean.`);
+  }
   if (snapshot.reviewDecision === 'CHANGES_REQUESTED') blockers.push('A reviewer requested changes.');
   if (policy.requireApproval && snapshot.reviewDecision !== 'APPROVED') blockers.push('Policy requires an approving review.');
   if (checks.failing.length) blockers.push(`${checks.failing.length} check(s) are failing.`);

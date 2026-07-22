@@ -105,16 +105,23 @@ export async function prMergeCommand(
   selector: string | undefined,
   options: { confirm: string; allowRisk?: PolicyRiskLevel },
 ): Promise<void> {
-  const { snapshot, assessment, config } = await snapshotAndAssessment(cwd, selector, options.allowRisk);
+  const { snapshot, assessment } = await snapshotAndAssessment(cwd, selector, options.allowRisk);
   if (options.confirm !== String(snapshot.number)) {
     throw new Error(`Confirmation must exactly match PR number ${snapshot.number}.`);
   }
   if (!assessment.readyToMerge) {
     throw new Error(`Refusing to merge:\n${assessment.blockers.map((item) => `  - ${item}`).join('\n')}`);
   }
-  const method = githubPolicy(config).mergeMethod;
+  const current = await snapshotAndAssessment(cwd, snapshot.url, options.allowRisk);
+  if (current.snapshot.headSha !== snapshot.headSha || current.snapshot.baseSha !== snapshot.baseSha) {
+    throw new Error('The PR head or base changed during merge assessment. Inspect and confirm again.');
+  }
+  if (!current.assessment.readyToMerge) {
+    throw new Error(`Refusing to merge after revalidation:\n${current.assessment.blockers.map((item) => `  - ${item}`).join('\n')}`);
+  }
+  const method = githubPolicy(current.config).mergeMethod;
   const result = await runArgs('gh', [
-    'pr', 'merge', snapshot.url, `--${method}`, '--match-head-commit', snapshot.headSha,
+    'pr', 'merge', current.snapshot.url, `--${method}`, '--match-head-commit', current.snapshot.headSha,
   ], cwd, { inherit: true });
   if (result.code !== 0) {
     process.exitCode = result.code;
