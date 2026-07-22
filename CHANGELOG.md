@@ -5,6 +5,8 @@ Keep a Changelog categories.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-22
+
 ### Added
 
 - Exact-head evidence records for command-verified review, real-behavior, proof, and security runs.
@@ -37,5 +39,6 @@ Keep a Changelog categories.
 
 - Normalize Git-reported paths across Windows and POSIX before enforcing explicit-path commits.
 
-[Unreleased]: https://github.com/CJianYu/shiploop/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/CJianYu/shiploop/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/CJianYu/shiploop/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/CJianYu/shiploop/releases/tag/v0.1.0
