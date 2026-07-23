@@ -8,16 +8,60 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      plan: ${{ steps.plan.outputs.plan }}
+      run_test: ${{ steps.plan.outputs.run_test }}
+      run_package: ${{ steps.plan.outputs.run_package }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Create the exact-SHA CI plan
+        id: plan
+        shell: bash
+        env:
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base_sha="$EVENT_BASE_SHA"
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+            base_sha="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+          fi
+          node dist/cli.js ci plan --base "$base_sha" --head HEAD --json > ci-plan.json
+          plan="$(jq -c . ci-plan.json)"
+          echo "plan=$plan" >> "$GITHUB_OUTPUT"
+          echo "run_test=$(jq -r '.lanes | index("test") != null' ci-plan.json)" >> "$GITHUB_OUTPUT"
+          echo "run_package=$(jq -r '.lanes | index("package") != null' ci-plan.json)" >> "$GITHUB_OUTPUT"
+          cat ci-plan.json
+
   test:
+    needs: preflight
+    if: needs.preflight.outputs.run_test == 'true'
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node: [20, 22]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -27,13 +71,36 @@ jobs:
       - run: npm run build
 
   package:
+    needs: preflight
+    if: needs.preflight.outputs.run_package == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
       - run: npm pack --dry-run
+
+  ci-gate:
+    if: always()
+    needs: [preflight, test, package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every selected lane to pass
+        env:
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: |
+          for result in "$PREFLIGHT_RESULT" "$TEST_RESULT" "$PACKAGE_RESULT"; do
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              echo "Selected CI lane did not pass: $result" >&2
+              exit 1
+            fi
+          done

@@ -11,6 +11,13 @@ interface EvidenceStore {
   records: EvidenceRecord[];
 }
 
+export interface EvidenceMetadata {
+  runId?: string;
+  runAttempt?: number;
+  checkName?: string;
+  artifactSha256?: string;
+}
+
 async function storePath(root: string): Promise<string> {
   return join(await gitCommonDir(root), 'shiploop', 'evidence.json');
 }
@@ -63,19 +70,48 @@ async function appendEvidence(root: string, record: EvidenceRecord): Promise<voi
   }
 }
 
-function validateInput(kind: EvidenceKind, summary: string, url?: string): void {
+function validateInput(kind: EvidenceKind, summary: string, url?: string, metadata: EvidenceMetadata = {}): void {
   if (!summary.trim()) throw new Error('Evidence summary must not be empty.');
   if (url && !/^https?:\/\//.test(url)) throw new Error('Evidence URL must start with http:// or https://.');
   if (!['proof', 'real', 'review', 'security'].includes(kind)) throw new Error(`Unsupported evidence kind: ${kind}`);
+  const hasGitHubMetadata = metadata.runAttempt !== undefined
+    || metadata.checkName !== undefined
+    || metadata.artifactSha256 !== undefined;
+  if (hasGitHubMetadata && !metadata.runId) {
+    throw new Error('GitHub evidence metadata requires --run-id.');
+  }
+  if (metadata.runId && !/^[1-9]\d*$/.test(metadata.runId)) {
+    throw new Error('GitHub run ID must be a positive integer.');
+  }
+  if (metadata.runAttempt !== undefined && (!Number.isInteger(metadata.runAttempt) || metadata.runAttempt < 1)) {
+    throw new Error('GitHub run attempt must be a positive integer.');
+  }
+  if (metadata.checkName !== undefined && !metadata.checkName.trim()) {
+    throw new Error('GitHub check name must not be empty.');
+  }
+  if (metadata.artifactSha256 !== undefined && !/^[a-f0-9]{64}$/.test(metadata.artifactSha256)) {
+    throw new Error('Artifact SHA-256 must be 64 lowercase hexadecimal characters.');
+  }
+}
+
+function githubMetadata(metadata: EvidenceMetadata): EvidenceRecord['github'] | undefined {
+  if (!metadata.runId) return undefined;
+  return {
+    runId: metadata.runId,
+    ...(metadata.runAttempt !== undefined ? { runAttempt: metadata.runAttempt } : {}),
+    ...(metadata.checkName ? { checkName: metadata.checkName.trim() } : {}),
+    ...(metadata.artifactSha256 ? { artifactSha256: metadata.artifactSha256 } : {}),
+  };
 }
 
 export async function addEvidence(
   root: string,
-  input: { kind: EvidenceKind; summary: string; command?: string; url?: string; base?: string },
+  input: { kind: EvidenceKind; summary: string; command?: string; url?: string; base?: string } & EvidenceMetadata,
 ): Promise<EvidenceRecord> {
-  validateInput(input.kind, input.summary, input.url);
+  validateInput(input.kind, input.summary, input.url, input);
   const currentHead = await requireCleanHead(root);
   const baseSha = input.base ? await resolveCommit(root, input.base) : undefined;
+  const github = githubMetadata(input);
   const record: EvidenceRecord = {
     version: 1,
     id: randomUUID(),
@@ -87,6 +123,7 @@ export async function addEvidence(
     createdAt: new Date().toISOString(),
     ...(input.command ? { command: input.command } : {}),
     ...(input.url ? { url: input.url } : {}),
+    ...(github ? { github } : {}),
   };
   await appendEvidence(root, record);
   return record;
@@ -94,9 +131,9 @@ export async function addEvidence(
 
 export async function runEvidence(
   root: string,
-  input: { kind: EvidenceKind; summary: string; command: string; url?: string; base?: string },
+  input: { kind: EvidenceKind; summary: string; command: string; url?: string; base?: string } & EvidenceMetadata,
 ): Promise<EvidenceRecord> {
-  validateInput(input.kind, input.summary, input.url);
+  validateInput(input.kind, input.summary, input.url, input);
   if (!input.command.trim()) throw new Error('Evidence command must not be empty.');
   const expectedHead = await requireCleanHead(root);
   const baseSha = input.base ? await resolveCommit(root, input.base) : undefined;
@@ -106,6 +143,7 @@ export async function runEvidence(
   if (input.base && await resolveCommit(root, input.base) !== baseSha) {
     throw new Error('The Git base ref changed while evidence was running; nothing was recorded.');
   }
+  const github = githubMetadata(input);
   const record: EvidenceRecord = {
     version: 1,
     id: randomUUID(),
@@ -118,6 +156,7 @@ export async function runEvidence(
     command: input.command,
     durationMs: result.durationMs,
     ...(input.url ? { url: input.url } : {}),
+    ...(github ? { github } : {}),
   };
   await appendEvidence(root, record);
   return record;

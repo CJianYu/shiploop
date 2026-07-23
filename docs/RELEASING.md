@@ -20,7 +20,8 @@ does not use a long-lived npm write token.
      --yes
    ```
 
-4. Protect release tags and review who can approve releases.
+4. Create the `npm-release` GitHub environment and configure its required reviewers.
+5. Protect release tags and review who can approve releases.
 
 The npm owner, GitHub owner, repository, and workflow filename are case-sensitive trust inputs.
 
@@ -40,10 +41,23 @@ The npm owner, GitHub owner, repository, and workflow filename are case-sensitiv
 4. Commit the release closeout as `chore(release): prepare X.Y.Z`.
 5. Create and push the matching tag, for example `v0.1.0`.
 
-The workflow rejects a tag that does not exactly match `package.json`. It then repeats all gates,
-publishes through OIDC, and creates GitHub release notes only after npm publication succeeds. A
-bootstrap version that is already present may proceed only when its npm `gitHead` exactly matches the
-tag commit; any other version collision fails closed.
+The workflow has separate validation and publication jobs. Validation rejects a tag that does not
+exactly match `package.json`, runs every gate, builds the npm tarball, and generates a manifest that
+binds its SHA-256 and size to the package identity, tag, and exact Git head. Publication waits for
+the `npm-release` environment, downloads that same tarball, verifies the manifest, publishes through
+OIDC, and creates GitHub release notes only after npm verification succeeds.
+
+A version already present may proceed only when its npm `gitHead` exactly matches the tag commit;
+any other version collision fails closed. Actions are pinned to full commit SHAs, checkout
+credentials are not persisted, and only the publication job receives `id-token: write`.
+
+The same evidence can be produced and checked locally:
+
+```bash
+npm pack
+shiploop release manifest --tag v0.3.0 --artifact shiploop-0.3.0.tgz --output release-manifest.json
+shiploop release verify --manifest release-manifest.json --artifact shiploop-0.3.0.tgz
+```
 
 ## Recovery
 

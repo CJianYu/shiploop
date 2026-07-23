@@ -2,6 +2,7 @@
 import { Command, Option } from 'commander';
 import { readFileSync } from 'node:fs';
 import { closeoutCommand } from './commands/closeout.js';
+import { ciPlanCommand } from './commands/ci.js';
 import { commitCommand } from './commands/commit.js';
 import { contextCommand } from './commands/context.js';
 import { doctorCommand } from './commands/doctor.js';
@@ -12,9 +13,11 @@ import { laneFinishCommand, laneStartCommand, laneStatusCommand } from './comman
 import { proofCommand } from './commands/proof.js';
 import { prBriefCommand, prChecksCommand, prInspectCommand, prMergeCommand } from './commands/pr.js';
 import { reviewCommand } from './commands/review.js';
+import { releaseManifestCommand, releaseVerifyCommand } from './commands/release.js';
 import { taskCommand } from './commands/task.js';
 import { gitRoot, isGitRepository } from './lib/git.js';
 import type { EvidenceKind, PolicyRiskLevel, Profile } from './types.js';
+import type { EvidenceMetadata } from './evidence.js';
 import { ui } from './ui.js';
 
 const program = new Command();
@@ -44,6 +47,14 @@ program.command('doctor')
   .description('Diagnose repository readiness without changing it')
   .option('--json', 'emit machine-readable output')
   .action(async (options: { json?: boolean }) => doctorCommand(await root(), options));
+
+const ci = program.command('ci').description('Plan exact-SHA CI work from repository policy');
+ci.command('plan')
+  .description('Produce the single routing manifest for a base/head change')
+  .requiredOption('--base <ref>', 'base branch, tag, or commit')
+  .option('--head <ref>', 'head branch, tag, or commit', 'HEAD')
+  .option('--json', 'emit machine-readable output')
+  .action(async (options: { base: string; head?: string; json?: boolean }) => ciPlanCommand(await root(), options));
 
 const hooks = program.command('hooks').description('Install or inspect repository-local Git hooks');
 hooks.command('install')
@@ -101,22 +112,29 @@ program.command('review')
   .action(async (options: { diff?: boolean; json?: boolean }) => reviewCommand(await root(), options));
 
 const evidence = program.command('evidence').description('Record head-bound proof, review, and real-behavior evidence');
-evidence.command('add')
+function addEvidenceMetadataOptions(command: Command): Command {
+  return command
+    .option('--run-id <id>', 'GitHub Actions run ID')
+    .option('--run-attempt <number>', 'GitHub Actions run attempt', (value) => Number.parseInt(value, 10))
+    .option('--check <name>', 'GitHub check or job name')
+    .option('--artifact-sha256 <digest>', 'SHA-256 of the evidence artifact');
+}
+addEvidenceMetadataOptions(evidence.command('add')
   .description('Attest external evidence for the current Git head')
   .addOption(new Option('--kind <kind>', 'evidence kind').choices(['proof', 'real', 'review', 'security']).makeOptionMandatory())
   .requiredOption('--summary <summary>', 'short description of what the evidence proves')
   .option('--command <command>', 'command that produced the external evidence')
   .option('--url <url>', 'artifact, run, screenshot, or report URL')
-  .option('--base <ref>', 'base ref to bind when the evidence assesses a diff')
-  .action(async (options: { kind: EvidenceKind; summary: string; command?: string; url?: string; base?: string }) => evidenceAddCommand(await root(), options));
-evidence.command('run')
+  .option('--base <ref>', 'base ref to bind when the evidence assesses a diff'))
+  .action(async (options: { kind: EvidenceKind; summary: string; command?: string; url?: string; base?: string } & EvidenceMetadata) => evidenceAddCommand(await root(), options));
+addEvidenceMetadataOptions(evidence.command('run')
   .description('Run a command and record evidence only when it succeeds on a stable head')
   .addOption(new Option('--kind <kind>', 'evidence kind').choices(['proof', 'real', 'review', 'security']).makeOptionMandatory())
   .requiredOption('--summary <summary>', 'short description of what the command proves')
   .requiredOption('--command <command>', 'command to execute')
   .option('--url <url>', 'artifact or report URL associated with the command')
-  .option('--base <ref>', 'base ref to bind when the evidence assesses a diff')
-  .action(async (options: { kind: EvidenceKind; summary: string; command: string; url?: string; base?: string }) => evidenceRunCommand(await root(), options));
+  .option('--base <ref>', 'base ref to bind when the evidence assesses a diff'))
+  .action(async (options: { kind: EvidenceKind; summary: string; command: string; url?: string; base?: string } & EvidenceMetadata) => evidenceRunCommand(await root(), options));
 evidence.command('list')
   .description('List evidence for the current head')
   .option('--all', 'include evidence from previous heads')
@@ -148,6 +166,22 @@ pr.command('merge')
     selector: string | undefined,
     options: { confirm: string; allowRisk?: PolicyRiskLevel },
   ) => prMergeCommand(await root(), selector, options));
+
+const release = program.command('release').description('Create and verify exact-SHA release evidence');
+release.command('manifest')
+  .description('Bind a package artifact to its tag, package identity, and Git head')
+  .requiredOption('--tag <tag>', 'release tag, which must match v<package version>')
+  .requiredOption('--artifact <path>', 'already-built package artifact')
+  .option('--package-json <path>', 'package manifest', 'package.json')
+  .option('--output <path>', 'write the JSON manifest instead of stdout')
+  .action(async (options: { tag: string; artifact: string; packageJson?: string; output?: string }) => releaseManifestCommand(await root(), options));
+release.command('verify')
+  .description('Fail if a release manifest, tag, head, package, or artifact no longer matches')
+  .requiredOption('--manifest <path>', 'release manifest JSON')
+  .option('--artifact <path>', 'artifact path; defaults to the file beside the manifest')
+  .option('--package-json <path>', 'package manifest', 'package.json')
+  .option('--json', 'emit the verified manifest')
+  .action(async (options: { manifest: string; artifact?: string; packageJson?: string; json?: boolean }) => releaseVerifyCommand(await root(), options));
 
 program.command('commit')
   .description('Commit an explicit set of files as one logical change')

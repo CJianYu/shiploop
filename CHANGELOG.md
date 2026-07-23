@@ -5,6 +5,23 @@ Keep a Changelog categories.
 
 ## [Unreleased]
 
+### Added
+
+- Exact-SHA CI planning with merge-base file discovery, risk classification, docs-only detection,
+  and centrally configured job lanes.
+- GitHub run ID, run attempt, check name, and artifact digest metadata for head-bound evidence.
+- Immutable npm release manifests that verify tag, head, package identity, artifact size, and
+  SHA-256 before publication.
+
+### Changed
+
+- CI now consumes one preflight routing manifest and exposes a stable aggregate gate.
+- Release validation and publication are separated by the `npm-release` environment and reuse the
+  exact validated tarball.
+- GitHub Actions use full commit pins, least-privilege job permissions, and non-persisted checkout
+  credentials.
+- Pull requests now explicitly capture the problem, rationale, user impact, risk, and proof.
+
 ## [0.2.0] - 2026-07-22
 
 ### Added

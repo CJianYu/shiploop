@@ -55,6 +55,31 @@ export async function resolveCommit(cwd: string, ref: string): Promise<string> {
   return result.stdout.trim();
 }
 
+export async function mergeBase(cwd: string, base: string, head: string): Promise<string> {
+  const result = await runArgs('git', ['merge-base', base, head], cwd);
+  if (result.code !== 0 || !result.stdout.trim()) {
+    throw new Error(`Cannot find a merge base between ${base} and ${head}.`);
+  }
+  return result.stdout.trim();
+}
+
+export async function diffFiles(cwd: string, base: string, head: string): Promise<string[]> {
+  const result = await runArgs('git', ['diff', '--name-status', '-z', '--find-renames', base, head], cwd);
+  if (result.code !== 0) throw new Error(`Cannot compare Git commits ${base} and ${head}.`);
+  const fields = result.stdout.split('\0').filter(Boolean);
+  const files: string[] = [];
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++] ?? '';
+    const first = fields[index++];
+    if (first) files.push(first);
+    if (/^[RC]/.test(status)) {
+      const second = fields[index++];
+      if (second) files.push(second);
+    }
+  }
+  return [...new Set(files)].sort();
+}
+
 export async function defaultBranch(cwd: string): Promise<string> {
   const remote = await runArgs('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], cwd);
   if (remote.code === 0) return remote.stdout.trim().replace(/^origin\//, '');
