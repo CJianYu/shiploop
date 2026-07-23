@@ -12,7 +12,7 @@ development—short contexts, parallel lanes, local CI, logical commits, and a r
 branch—without assuming that every repository should work directly on `main`.
 
 ```text
-task brief → agent lane → local proof → explicit commit → head-bound evidence → guarded PR merge
+task brief → agent lane → local proof → explicit commit → exact-SHA CI/evidence → guarded ship
 ```
 
 ## Why Shiploop
@@ -27,10 +27,12 @@ bottleneck. Shiploop turns repository policy into executable commands:
 - `shiploop context` emits a compact repository and task packet for any coding agent.
 - `shiploop lane` coordinates parallel write surfaces and rejects likely overlap.
 - `shiploop proof` selects relevant checks and binds the passing receipt to the current diff.
+- `shiploop ci plan` gives every CI job one exact base/head routing manifest.
 - `shiploop review` elevates migrations, auth, billing, permissions, CI, and other risky changes.
 - `shiploop commit` refuses `.` and globs, requires explicit files, and prevents staged spillover.
 - `shiploop closeout` checks cleanliness, proof freshness, branch policy, and upstream sync.
 - `shiploop evidence` records review and real-behavior proof against an exact commit SHA.
+- `shiploop release manifest` binds a package artifact to its tag, package identity, and digest.
 - `shiploop pr inspect` combines required GitHub checks, changed-file risk, reviews, and local evidence.
 - `shiploop pr checks --logs` surfaces failing required Actions logs without hiding red checks.
 - `shiploop pr merge` merges only after policy gates and exact-number confirmation.
@@ -51,6 +53,7 @@ shiploop doctor
 shiploop task "Preserve session expiry" --owner agent-1
 shiploop lane start "Preserve session expiry" --owner agent-1 --owns "src/auth/**,test/auth/**"
 shiploop context --task "Preserve session expiry"
+shiploop ci plan --base origin/main --json
 
 # Let your preferred coding agent implement the bounded task.
 shiploop proof
@@ -125,6 +128,19 @@ risk:
 commit:
   conventional: true
   maxSubjectLength: 72
+ci:
+  docs:
+    - "**/*.md"
+    - "docs/**"
+  lanes:
+    - name: test
+      when:
+        - "src/**"
+        - "test/**"
+    - name: package
+      when:
+        - "package.json"
+        - "src/**"
 github:
   requiredEvidence:
     - review
@@ -141,6 +157,11 @@ Steps marked `quick: true` may run from the optional pre-commit hook. Quick proo
 fresh-proof receipt required by protected commits; only a normal `shiploop proof` can do that.
 Editors can use [`schemas/config.schema.json`](schemas/config.schema.json) for completion and
 validation.
+
+`shiploop ci plan --base <ref> --head <ref> --json` resolves both refs to immutable commits,
+computes the merge base, classifies risk, detects a docs-only change, and selects configured lanes.
+The included CI workflow uses this as its sole routing decision and exposes one stable `ci-gate`
+job for branch protection.
 
 ## Operating model
 

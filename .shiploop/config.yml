@@ -42,6 +42,21 @@ risk:
 commit:
   conventional: true
   maxSubjectLength: 72
+ci:
+  docs:
+    - "**/*.md"
+    - docs/**
+    - .github/ISSUE_TEMPLATE/**
+  lanes:
+    - name: test
+      when:
+        - "**"
+    - name: package
+      when:
+        - package.json
+        - package-lock.json
+        - src/**
+        - schemas/**
 github:
   requiredEvidence:
     - review

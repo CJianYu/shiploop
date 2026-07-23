@@ -46,6 +46,13 @@ export function baseConfig(profile: Profile): ShiploopConfig {
       conventional: true,
       maxSubjectLength: 72,
     },
+    ci: {
+      docs: ['**/*.md', 'docs/**', '.github/ISSUE_TEMPLATE/**'],
+      lanes: [
+        { name: 'test', when: ['**'] },
+        { name: 'package', when: ['package.json', 'package-lock.json', 'src/**', 'schemas/**'] },
+      ],
+    },
     github: {
       requiredEvidence: profile === 'regulated' ? ['review', 'real'] : profile === 'team-pr' ? ['review'] : [],
       maxMergeRisk: 'low',
@@ -121,6 +128,21 @@ function assertConfig(value: unknown): asserts value is ShiploopConfig {
     || !Number.isInteger(config.commit.maxSubjectLength)
     || config.commit.maxSubjectLength < 1) {
     throw new Error('commit requires conventional and a positive maxSubjectLength.');
+  }
+  if (config.ci !== undefined) {
+    if (!isStringArray(config.ci.docs)) throw new Error('ci.docs must be an array of strings.');
+    if (!Array.isArray(config.ci.lanes)) throw new Error('ci.lanes must be an array.');
+    const names = new Set<string>();
+    for (const [index, lane] of config.ci.lanes.entries()) {
+      if (!lane || typeof lane.name !== 'string' || !lane.name.trim()) {
+        throw new Error(`ci.lanes[${index}].name must be a non-empty string.`);
+      }
+      if (names.has(lane.name)) throw new Error(`ci.lanes contains duplicate name: ${lane.name}`);
+      names.add(lane.name);
+      if (!isStringArray(lane.when) || !lane.when.length) {
+        throw new Error(`ci.lanes[${index}].when must be a non-empty array of strings.`);
+      }
+    }
   }
   if (config.github !== undefined) {
     const validEvidence: EvidenceKind[] = ['proof', 'real', 'review', 'security'];

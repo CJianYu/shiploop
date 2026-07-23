@@ -11,6 +11,11 @@ export interface ProofStep {
   when?: string[];
 }
 
+export interface CiLane {
+  name: string;
+  when: string[];
+}
+
 export interface ShiploopConfig {
   version: 1;
   profile: Profile;
@@ -29,6 +34,10 @@ export interface ShiploopConfig {
   commit: {
     conventional: boolean;
     maxSubjectLength: number;
+  };
+  ci?: {
+    docs: string[];
+    lanes: CiLane[];
   };
   github?: {
     requiredEvidence: EvidenceKind[];
@@ -78,4 +87,28 @@ export interface EvidenceRecord {
   command?: string;
   url?: string;
   durationMs?: number;
+  github?: {
+    runId: string;
+    runAttempt?: number;
+    checkName?: string;
+    artifactSha256?: string;
+  };
+}
+
+export interface ReleaseManifest {
+  version: 1;
+  generatedAt: string;
+  git: {
+    headSha: string;
+    tag: string;
+  };
+  package: {
+    name: string;
+    version: string;
+  };
+  artifact: {
+    file: string;
+    sha256: string;
+    bytes: number;
+  };
 }

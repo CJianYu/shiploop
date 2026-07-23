@@ -67,6 +67,30 @@ describe('head-bound evidence', () => {
     expect(await listEvidence(root)).toHaveLength(2);
   });
 
+  it('binds GitHub run identity and artifact digest to evidence', async () => {
+    const root = await repository();
+    const digest = 'a'.repeat(64);
+    const record = await addEvidence(root, {
+      kind: 'proof',
+      summary: 'CI artifact verified',
+      runId: '123456',
+      runAttempt: 2,
+      checkName: 'package',
+      artifactSha256: digest,
+    });
+    expect(record.github).toEqual({
+      runId: '123456',
+      runAttempt: 2,
+      checkName: 'package',
+      artifactSha256: digest,
+    });
+    await expect(addEvidence(root, {
+      kind: 'proof',
+      summary: 'Missing run identity',
+      artifactSha256: digest,
+    })).rejects.toThrow('requires --run-id');
+  });
+
   it('refuses diff evidence when its movable base changes during the command', async () => {
     const root = await repository();
     await run('git branch review-base HEAD', root);

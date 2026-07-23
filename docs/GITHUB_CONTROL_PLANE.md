@@ -39,6 +39,29 @@ Use `evidence add` for proof that lives outside the terminal, such as a browser 
 test, deployment preview, or externally hosted security report. This is explicitly marked as an
 attestation rather than command-verified evidence.
 
+GitHub-hosted evidence can also carry immutable run and artifact identity:
+
+```bash
+shiploop evidence add \
+  --kind proof \
+  --summary "Package acceptance passed" \
+  --run-id 123456789 \
+  --run-attempt 2 \
+  --check package \
+  --artifact-sha256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
+The run ID is required whenever an attempt, check name, or artifact digest is supplied. This makes
+the evidence record precise enough for adapters to revalidate later instead of treating a mutable
+workflow URL as the complete identity.
+
+## CI routing
+
+`shiploop ci plan --base <ref> --head <ref> --json` is the single routing decision for a change.
+It resolves exact commits, compares from their merge base, classifies the complete changed-file
+surface, detects docs-only changes, and selects lanes from `ci.lanes`. Keeping this decision in one
+manifest prevents separate workflow jobs from drifting into inconsistent path filters.
+
 Supported kinds are:
 
 - `proof`: additional targeted or system-level validation.
